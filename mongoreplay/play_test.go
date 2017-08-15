@@ -19,7 +19,7 @@ func TestRepeatGeneration(t *testing.T) {
 		t.Fatalf("error creating playback file %v", err)
 	}
 
-	err = bsonToWriter(file, recOp)
+	err = file.Encode(recOp)
 	if err != nil {
 		t.Fatalf("error writing to bson file %v", err)
 	}
@@ -75,7 +75,7 @@ func TestPlayOpEOF(t *testing.T) {
 	}
 
 	for _, op := range ops {
-		err := bsonToWriter(file, op)
+		err := file.Encode(op)
 		if err != nil {
 			t.Fatalf("unable to write to playback file %v", err)
 		}

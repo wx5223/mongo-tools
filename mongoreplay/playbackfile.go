@@ -2,12 +2,12 @@ package mongoreplay
 
 import (
 	"compress/gzip"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"os"
 	"time"
 
-	"github.com/10gen/llmgo/bson"
 	"github.com/mongodb/mongo-tools/common/util"
 )
 
@@ -21,8 +21,9 @@ type PlaybackFileMetadata struct {
 // PlaybackFileReader stores the necessary information for a playback source,
 // which is just an io.ReadCloser.
 type PlaybackFileReader struct {
-	io.ReadSeeker
+	rs    io.ReadSeeker
 	fname string
+	*gob.Decoder
 
 	metadata PlaybackFileMetadata
 }
@@ -30,8 +31,9 @@ type PlaybackFileReader struct {
 // PlaybackFileWriter stores the necessary information for a playback destination,
 // which is an io.WriteCloser and its location.
 type PlaybackFileWriter struct {
-	io.WriteCloser
+	wc    io.WriteCloser
 	fname string
+	*gob.Encoder
 
 	metadata PlaybackFileMetadata
 }
@@ -62,17 +64,21 @@ func NewPlaybackFileReader(filename string, gzip bool) (*PlaybackFileReader, err
 }
 
 func playbackFileReaderFromReadSeeker(rs io.ReadSeeker, filename string) (*PlaybackFileReader, error) {
+	decoder := gob.NewDecoder(rs)
 
 	// read the metadata from the file
 	metadata := new(PlaybackFileMetadata)
-	err := bsonFromReader(rs, metadata)
+
+	err := decoder.Decode(metadata)
+
 	if err != nil {
 		return nil, fmt.Errorf("error reading metadata: %v", err)
 	}
 
 	return &PlaybackFileReader{
-		ReadSeeker: rs,
-		fname:      filename,
+		rs:      rs,
+		fname:   filename,
+		Decoder: decoder,
 
 		metadata: *metadata,
 	}, nil
@@ -82,14 +88,24 @@ func playbackFileReaderFromReadSeeker(rs io.ReadSeeker, filename string) (*Playb
 // RecordedOp. It returns io.EOF when successfully complete.
 func (file *PlaybackFileReader) NextRecordedOp() (*RecordedOp, error) {
 	doc := new(RecordedOp)
-	err := bsonFromReader(file, doc)
+	err := file.Decode(doc)
 	if err != nil {
 		if err != io.EOF {
-			err = fmt.Errorf("ReadDocument Error: %v", err)
+			err = fmt.Errorf("Gob Decode Error: %v", err)
 		}
 		return nil, err
 	}
 	return doc, nil
+}
+
+func (file *PlaybackFileReader) Seek(offset int64, whence int) (int64, error) {
+	moved, err := file.rs.Seek(offset, whence)
+	if err != nil {
+		return moved, err
+	}
+
+	file.Decoder = gob.NewDecoder(file.rs)
+	return moved, nil
 }
 
 // NewPlaybackFileWriter initializes a new PlaybackFileWriter
@@ -117,23 +133,25 @@ func NewPlaybackFileWriter(playbackFileName string, driverOpsFiltered, isGzipWri
 func playbackFileWriterFromWriteCloser(wc io.WriteCloser, filename string,
 	metadata PlaybackFileMetadata) (*PlaybackFileWriter, error) {
 
-	bsonBytes, err := bson.Marshal(metadata)
-	if err != nil {
-		return nil, fmt.Errorf("error writing metadata: %v", err)
-	}
+	encoder := gob.NewEncoder(wc)
 
-	_, err = wc.Write(bsonBytes)
+	err := encoder.Encode(metadata)
 	if err != nil {
 		return nil, fmt.Errorf("error writing metadata: %v", err)
 	}
 
 	return &PlaybackFileWriter{
-		WriteCloser: wc,
-		fname:       filename,
+		wc:      wc,
+		fname:   filename,
+		Encoder: encoder,
 
 		metadata: metadata,
 	}, nil
 
+}
+
+func (pfWriter *PlaybackFileWriter) Close() error {
+	return pfWriter.wc.Close()
 }
 
 // NewGzipReadSeeker initializes a new GzipReadSeeker
@@ -184,9 +202,9 @@ func (pfReader *PlaybackFileReader) OpChan(repeat int) (<-chan *RecordedOp, <-ch
 
 				// Must read the metadata since file was seeked to 0
 				metadata := new(PlaybackFileMetadata)
-				err = bsonFromReader(pfReader, metadata)
+				err = pfReader.Decode(metadata)
 				if err != nil {
-					return fmt.Errorf("bson read error: %v", err)
+					return fmt.Errorf("gob decode error: %v", err)
 				}
 
 				var order int64

@@ -130,7 +130,7 @@ func newParallelPlaybackWriter(outfile *PlaybackFileWriter,
 	go func() {
 		defer wg.Done()
 		for op := range inputOpChan {
-			err := bsonToWriter(outfile, op)
+			err := outfile.Encode(op)
 			if err != nil {
 				errChan <- err
 				return

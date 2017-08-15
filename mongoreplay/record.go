@@ -153,6 +153,7 @@ func (record *RecordCommand) Execute(args []string) error {
 func Record(ctx *packetHandlerContext,
 	playbackWriter *PlaybackFileWriter,
 	noShortenReply bool) error {
+	// make an encoder
 
 	ch := make(chan error)
 	go func() {
@@ -173,7 +174,7 @@ func Record(ctx *packetHandlerContext,
 					continue
 				}
 			}
-			err := bsonToWriter(playbackWriter, op)
+			err := playbackWriter.Encode(op)
 			if err != nil {
 				fail = fmt.Errorf("error writing message: %v", err)
 				userInfoLogger.Logvf(Always, "%v", err)
