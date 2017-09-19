@@ -15,10 +15,12 @@ type FilterCommand struct {
 	OutFile         string   `description:"path to the output file to write to" short:"o" long:"outputFile"`
 	SplitFilePrefix string   `description:"prefix file name to use for the output files being written when splitting traffic" long:"outfilePrefix"`
 	StartTime       string   `description:"ISO 8601 timestamp to remove all operations before" long:"startAt"`
+	Duration        string   `description:"duration with which to cut file into" long:"duration"`
 	Split           int      `description:"split the traffic into n files with roughly equal numbers of connecitons in each" default:"1" long:"split"`
 	RemoveDriverOps bool     `description:"remove driver issued operations from the playback" long:"removeDriverOps"`
 	Gzip            bool     `long:"gzip" description:"decompress gzipped input"`
 
+	duration  time.Duration
 	startTime time.Time
 }
 
@@ -59,7 +61,7 @@ func (filter *FilterCommand) Execute(args []string) error {
 		}
 	}
 
-	if err := Filter(opChan, outfiles, filter.RemoveDriverOps, filter.startTime); err != nil {
+	if err := Filter(opChan, outfiles, filter.RemoveDriverOps, filter.startTime, filter.duration); err != nil {
 		userInfoLogger.Logvf(Always, "Filter: %v\n", err)
 	}
 
@@ -74,7 +76,8 @@ func (filter *FilterCommand) Execute(args []string) error {
 func Filter(opChan <-chan *RecordedOp,
 	outfiles []*PlaybackFileWriter,
 	removeDriverOps bool,
-	truncateTime time.Time) error {
+	truncateTime time.Time,
+	truncateDuration time.Duration) error {
 
 	opWriters := make([]chan<- *RecordedOp, len(outfiles))
 	errChan := make(chan error)
@@ -83,23 +86,39 @@ func Filter(opChan <-chan *RecordedOp,
 	for i := range outfiles {
 		opWriters[i] = newParallelPlaybackWriter(outfiles[i], errChan, wg)
 	}
+
+	filterFuncs := []filterFunc{}
+	if removeDriverOps {
+		filterFuncs = append(filterFuncs, filterDriverOps)
+	}
+
+	if !truncateTime.IsZero() {
+		pretruncateFilter := pretruncateFilterFactory(truncateTime)
+		filterFuncs = append(filterFuncs, pretruncateFilter)
+	}
+
+	first := true
+
+LOOP:
 	for op := range opChan {
-		// if specified, bypass driver operations
-		if removeDriverOps {
-			parsedOp, err := op.RawOp.Parse()
+		for _, f := range filterFuncs {
+			shouldSkip, err := f(op)
 			if err != nil {
 				return err
 			}
-			if IsDriverOp(parsedOp) {
-				continue
+			if shouldSkip {
+				continue LOOP
 			}
 		}
-		// if specified, ignore ops before the given timestamp
-		// if truncateTime not specified, it will be time zero and all
-		// operation times will be greater than it
-		if op.Seen.Time.Before(truncateTime) {
-			continue
+
+		if first {
+			first = false
+			if truncateDuration.Nanoseconds() != 0 {
+				durationFilter := durationFilterFactory(truncateDuration, op.Seen.Time)
+				filterFuncs = append(filterFuncs, durationFilter)
+			}
 		}
+
 		fileNum := op.SeenConnectionNum % int64(len(outfiles))
 		opWriters[fileNum] <- op
 	}
@@ -169,5 +188,35 @@ func (filter *FilterCommand) ValidateParams(args []string) error {
 		}
 		filter.startTime = t
 	}
+	if filter.Duration != "" {
+		d, err := time.ParseDuration(filter.Duration)
+		if err != nil {
+			return fmt.Errorf("error parsing duration argument: %v", err)
+		}
+		filter.duration = d
+	}
 	return nil
+}
+
+type filterFunc func(op *RecordedOp) (bool, error)
+
+func filterDriverOps(op *RecordedOp) (bool, error) {
+	parsedOp, err := op.RawOp.Parse()
+	if err != nil {
+		return false, err
+	}
+	return IsDriverOp(parsedOp), nil
+}
+
+func pretruncateFilterFactory(initialTime time.Time) filterFunc {
+	return func(op *RecordedOp) (bool, error) {
+		return op.Seen.Time.Before(initialTime), nil
+	}
+}
+
+func durationFilterFactory(d time.Duration, initialTime time.Time) filterFunc {
+	endTime := initialTime.Add(d)
+	return func(op *RecordedOp) (bool, error) {
+		return op.Seen.Time.After(endTime), nil
+	}
 }
