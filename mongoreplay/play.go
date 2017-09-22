@@ -117,6 +117,14 @@ func (play *PlayCommand) Execute(args []string) error {
 	if err != nil && err != io.EOF {
 		userInfoLogger.Logvf(Always, "OpChan: %v", err)
 	}
+	if play.GlobalOpts.MemProfileFname != "" {
+		f, err := os.Create(play.GlobalOpts.MemProfileFname)
+		if err != nil {
+			panic(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+	}
 	return nil
 }
 
