@@ -3,6 +3,8 @@ package mongoreplay
 import (
 	"fmt"
 	"io"
+	"os"
+	"runtime/pprof"
 	"time"
 
 	mgo "github.com/10gen/llmgo"
@@ -45,6 +47,14 @@ func (play *PlayCommand) Execute(args []string) error {
 		return err
 	}
 	play.GlobalOpts.SetLogging()
+	if play.GlobalOpts.CPUProfileFname != "" {
+		f, err := os.Create(play.GlobalOpts.CPUProfileFname)
+		if err != nil {
+			panic(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	statColl, err := newStatCollector(play.StatOptions, play.Collect, true, true)
 	if err != nil {
