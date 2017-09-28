@@ -230,7 +230,20 @@ mongo_tools_variables:
       - name: qa-tests-unstable
       - name: qa-tests-wt
       - name: native-cert-ssl
-
+    rhel70_stress_task_list: &rhel70_stress_tasks
+      - name: replay-dist
+      - name: replay_stress_1min
+      - name: replay_stress_1min_10pct
+      - name: replay_stress_1min_cpu
+      - name: replay_stress_1min_cpu_mem
+      - name: replay_stress_5min
+      - name: replay_stress_5min_10pct
+      - name: replay_stress_5min_cpu
+      - name: replay_stress_5min_cpu_mem
+      - name: replay_stress_10min
+      - name: replay_stress_10min_10pct
+      - name: replay_stress_10min_cpu
+      - name: replay_stress_10min_cpu_mem
 
 ## Common mongodb arguments
   mongod_arguments:
@@ -252,6 +265,53 @@ mongo_tools_variables:
     ssl: &mongo_ssl_startup_args
       mongo_args: "--port 33333 --ssl --sslCAFile ./common/db/openssl/testdata/ca.pem --sslPEMKeyFile ./common/db/openssl/testdata/server.pem --sslAllowInvalidCertificates"
       mongod_port: 33333
+
+variables:
+  # Templates used by stress
+- &stress_remote_credentials
+    private_key_file: ${workdir}/stress.pem
+    private_key_remote: ${stress_private_key}
+    aws_key_remote: ${stress_aws_key}
+    aws_secret_remote: ${stress_aws_secret}
+
+- &stress_ec2_instances
+    aws_ec2_client_yml: aws_ec2_client.yml
+    aws_ec2_server_yml: aws_ec2_server.yml
+    ssh_identity: -i ${private_key_file}
+    ssh_key_id: ${stress_ssh_key_id}
+    security_groups: ${stress_security_groups}
+    ami: ami-39aaa342
+    remote_user: root
+    remote_group: root
+    sudo:
+
+- &stress_mongod
+    port: "20000"
+    db_path: /data/db
+    log_path: $HOME/mongod.log
+    seed_url: https://s3.amazonaws.com/mciuploads/mongo-tools/stress/seedfiles
+    seed_file: mongod-42gb.tgz
+
+- &stress_test
+    s3_url: https://s3.amazonaws.com/mciuploads/mongo-tools/stress/gobfiles
+    gob_file: 1min.gob.gz
+    create_split_gob_file: "0"
+    proffile:
+    memfile:
+    log_file: mongoreplay.log
+    play_split_num: "1"
+    play_options: --fullSpeed
+    playback_file: /data/mongoreplay.gob
+
+- &stress_graph
+    cpu_graph_file:
+    mem_graph_file:
+
+- &stress_files
+    server_artifacts: ${log_path} ${db_path}/diagnostic.data
+    client_artifacts: ${log_file} ${proffile} ${memfile} ${cpu_graph_file} ${mem_graph_file}
+    s3_bucket: mciuploads
+    s3_archive_dir: mongo-tools/stress
 
 functions:
   "run legacy tests":
@@ -593,6 +653,350 @@ functions:
         # we run resmoke from.
         cp mci.buildlogger test/qa-tests
 
+  "set up remote credentials":
+    command: shell.exec
+    params:
+      # silent: true
+      script: |
+        set -o errexit
+
+        if [ ! -z "${private_key_remote}" ] && [ ! -z "${private_key_file}" ] ; then
+          mkdir -p ~/.ssh
+          echo -n "${private_key_remote}" > ${private_key_file|/dev/null}
+          chmod 0600 ${private_key_file|/dev/null}
+        fi
+
+        echo "Private key file ${private_key_file}: $(cat ${private_key_file})"
+
+        mkdir -p ~/.aws
+        cat <<EOF > ~/.aws/config
+        [default]
+        region = us-east-1
+        EOF
+
+        cat <<EOF > ~/.aws/credentials
+        [default]
+        aws_access_key_id = ${aws_key_remote}
+        aws_secret_access_key = ${aws_secret_remote}
+        EOF
+
+        cat <<EOF > ~/.boto
+        [Boto]
+        https_validate_certificates = False
+        EOF
+
+  "set up virtualenv" :
+    command: shell.exec
+    type: test
+    params:
+        working_dir: src
+        script: |
+          # exit immediately if virtualenv is not found
+          set -o errexit
+          set -o verbose
+
+          python_loc=$(which ${python|/opt/mongodbtoolchain/v2/bin/python2})
+          if [ "Windows_NT" = "$OS" ]; then
+            python_loc=$(cygpath -w $python_loc)
+          fi
+          virtualenv --python $python_loc --system-site-packages ./venv
+
+  "set up EC2 instances":
+    - command: shell.exec
+      params:
+        working_dir: src
+        script: |
+
+          set -o errexit
+          ${activate_virtualenv}
+          easy_install --upgrade boto3
+
+          for security_group in ${security_groups}
+          do
+            security_groups="$security_groups -s $security_group"
+          done
+
+          # Create new instance for test client.
+          bash launch_evergreen_ec2_instance.sh   \
+            -a ${ami}                             \
+            -d xvdf/3072/gp2/0                    \
+            -i c3.4xlarge                         \
+            -k ${ssh_key_id}                      \
+            -p client_                            \
+            $security_groups                      \
+            -t "AMI Evergreen client_${task_id}"  \
+            -y ${aws_ec2_client_yml}
+
+          # Create new instance for test server.
+          bash launch_evergreen_ec2_instance.sh   \
+            -a ${ami}                             \
+            -d xvdf/500/io1/10000                 \
+            -i c3.4xlarge                         \
+            -k ${ssh_key_id}                      \
+            -p server_                            \
+            $security_groups                      \
+            -t "AMI Evergreen server_${task_id}"  \
+            -y ${aws_ec2_server_yml}
+
+    - command: expansions.update
+      params:
+        file: src/${aws_ec2_client_yml}
+
+    - command: expansions.update
+      params:
+        file: src/${aws_ec2_server_yml}
+
+    - command: shell.exec
+      params:
+        shell: bash
+        working_dir: src
+        script: |
+          set -o errexit
+          # Copy mount_data_drive.sh & mongoreplay to remote client host.
+          ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
+          ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
+            --verbose                                        \
+            --userHost ${remote_user}@${client_ip_address}   \
+            --operation "copy_to"                            \
+            --sshConnectionOptions "$ssh_connection_options" \
+            --retries ${ssh_retries|0}                       \
+            --file mount_data_drive.sh --file bin/mongoreplay
+
+    - command: shell.exec
+      params:
+        shell: bash
+        working_dir: src
+        script: |
+          set -o errexit
+          # Copy mount_data_drive.sh & mongod to remote server host.
+          ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
+          ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
+            --verbose                                        \
+            --userHost ${remote_user}@${server_ip_address}   \
+            --operation "copy_to"                            \
+            --sshConnectionOptions "$ssh_connection_options" \
+            --retries ${ssh_retries|0}                       \
+            --file mount_data_drive.sh --file bin/mongod
+
+    - command: shell.exec
+      params:
+        shell: bash
+        working_dir: src
+        script: |
+          set -o errexit
+          device_name="/dev/xvdf"
+          fstype="xfs"
+          script_opts="-d $device_name"
+          script_opts="$script_opts -t $fstype"
+          user_group="${remote_user}:${remote_group}"
+          script_opts="$script_opts -u $user_group"
+          data_db=/data/db
+          set_permission="chmod 777 $data_db"
+          cmds="${sudo} bash mount_data_drive.sh $script_opts; $set_permission; ls -ld $data_db; df; mount"
+          ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
+          ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
+            --verbose                                        \
+            --userHost ${remote_user}@${client_ip_address}   \
+            --sshConnectionOptions "$ssh_connection_options" \
+            --retries ${ssh_retries|0}                       \
+            --commands "$cmds"
+
+    - command: shell.exec
+      params:
+        shell: bash
+        working_dir: src
+        script: |
+          set -o errexit
+          cmds="export GOPATH=\$HOME/go_dev; mkdir \$GOPATH; go get github.com/uber/go-torch; git clone https://github.com/brendangregg/FlameGraph"
+          ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
+          ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
+            --verbose                                        \
+            --userHost ${remote_user}@${client_ip_address}   \
+            --sshConnectionOptions "$ssh_connection_options" \
+            --retries ${ssh_retries|0}                       \
+            --commands "$cmds"
+
+    - command: shell.exec
+      params:
+        shell: bash
+        working_dir: src
+        script: |
+          set -o errexit
+          device_name="/dev/xvdf"
+          fstype="xfs"
+          script_opts="-d $device_name"
+          script_opts="$script_opts -t $fstype"
+          user_group="${remote_user}:${remote_group}"
+          script_opts="$script_opts -u $user_group"
+          data_db=/data/db
+          set_permission="chmod 777 $data_db"
+          cmds="${sudo} bash mount_data_drive.sh $script_opts"
+          cmds="$cmds; $set_permission; ls -ld $data_db; df; mount"
+          ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
+          ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
+            --verbose                                        \
+            --userHost ${remote_user}@${server_ip_address}   \
+            --sshConnectionOptions "$ssh_connection_options" \
+            --retries ${ssh_retries|0}                       \
+            --commands "$cmds"
+
+  "start remote mongod":
+    - command: shell.exec
+      params:
+        shell: bash
+        working_dir: src
+        script: |
+          set -o errexit
+          cmds="date"
+          if [ ! -z "${seed_url}" ] || [ ! -z "${seed_file}" ]; then
+            cmds="$cmds; curl -s ${seed_url}/${seed_file} | tar -xzv -C ${db_path}"
+          fi
+          cmds="$cmds; ${sudo} service firewalld stop"
+          cmds="$cmds; ./mongod --fork --logpath ${log_path} --dbpath ${db_path} --port ${port} --bind_ip 0.0.0.0"
+          cmds="$cmds; cat mongod.log"
+          ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
+          ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
+            --verbose                                        \
+            --userHost ${remote_user}@${server_ip_address}   \
+            --sshConnectionOptions "$ssh_connection_options" \
+            --retries ${ssh_retries|0}                       \
+            --commands "$cmds"
+
+  "run remote mongoreplay":
+    - command: shell.exec
+      params:
+        shell: bash
+        working_dir: src
+        script: |
+          set -o errexit
+            cmds="curl -s ${s3_url}/${gob_file} | gunzip -c > ${playback_file}"
+          if [ ${create_split_gob_file|0} -eq 1 ]; then
+            cmds="$cmds; if [ ${play_split_num|1} -gt 1 ]; then echo 'Using first split file from ${play_split_num} files' | tee -a ${log_file}; ./mongoreplay filter -p ${playback_file} --outfilePrefix=playfile --split=${play_split_num}; mv playfile00.playback ${playback_file}; fi"
+          fi
+          play_cmd="./mongoreplay play --host mongodb://${server_ip_address}:${port} ${play_options} -p ${playback_file}"
+          cmds="$cmds; echo '$play_cmd' | tee -a ${log_file}"
+          cmds="$cmds; (time $play_cmd) 2>&1 | tee -a ${log_file}"
+          ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
+          ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
+            --verbose                                        \
+            --userHost ${remote_user}@${client_ip_address}   \
+            --sshConnectionOptions "$ssh_connection_options" \
+            --retries ${ssh_retries|0}                       \
+            --commands "$cmds"
+
+  "generate graphs":
+    - command: shell.exec
+      params:
+        shell: bash
+        working_dir: src
+        script: |
+          set -o errexit
+          cmds="if [ -z ${proffile} ] || [ ! -e ${proffile|nofile} ] ; then echo 'Not generating graph for proffile'; else export GOPATH=\$HOME/go_dev; export PATH=$PATH:\$HOME/FlameGraph; \$GOPATH/bin/go-torch -b ${proffile} -f ${cpu_graph_file}; fi"
+          cmds="$cmds; if [ -z ${memfile} ] || [ ! -e ${memfile|nofile} ] ; then echo 'Not generating graph for memfile'; else go tool pprof -alloc_space -svg ${memfile} > ${mem_graph_file}; fi"
+          ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
+          ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
+            --verbose                                        \
+            --userHost ${remote_user}@${client_ip_address}   \
+            --sshConnectionOptions "$ssh_connection_options" \
+            --retries ${ssh_retries|0}                       \
+            --commands "$cmds"
+
+  "push remote files":
+    - command: shell.exec
+      params:
+        shell: bash
+        working_dir: src
+        script: |
+          set -o errexit
+          if [ -z "${client_artifacts}" ]; then
+            exit 0
+          fi
+          # Copy files from client.
+          for file in ${client_artifacts}
+          do
+            file_opts="$file_opts --file $file"
+          done
+          ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
+          ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
+            --verbose                                        \
+            --userHost ${remote_user}@${client_ip_address}   \
+            --operation "copy_from"                          \
+            --sshConnectionOptions "$ssh_connection_options" \
+            --retries ${ssh_retries|0}                       \
+            $file_opts
+
+    - command: shell.exec
+      params:
+        shell: bash
+        working_dir: src
+        script: |
+          set -o errexit
+          # Copy files from server.
+          for file in ${server_artifacts}
+          do
+            file_opts="$file_opts --file $file"
+          done
+          ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
+          ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
+            --verbose                                        \
+            --userHost ${remote_user}@${server_ip_address}   \
+            --operation "copy_from"                          \
+            --sshConnectionOptions "$ssh_connection_options" \
+            --retries ${ssh_retries|0}                       \
+            $file_opts
+
+    # Archive FTDC data & mongod.log.
+    - command: shell.exec
+      params:
+        working_dir: src
+        script: |
+          ${tar|tar} cvzf diagnostic-data.tgz diagnostic.data mongod.log
+    - command: s3.put
+      params:
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        local_file: src/diagnostic-data.tgz
+        remote_file: ${s3_archive_dir}/ftdc/mongo-diagnostic-data-${task_id}-${execution}.tgz
+        bucket: ${s3_bucket}
+        permissions: public-read
+        content_type: ${content_type|application/x-gzip}
+        display_name: FTDC Diagnostic Data & mongod.log - Execution ${execution}
+        optional: true
+
+    # Archive mongoreplay & client artifacts.
+    - command: shell.exec
+      params:
+        working_dir: src
+        script: |
+          ${tar|tar} cvzf mongoreplay.tgz bin/mongoreplay ${client_artifacts}
+    - command: s3.put
+      params:
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        local_file: src/mongoreplay.tgz
+        remote_file: ${s3_archive_dir}/mongoreplay/mongoreplay-${task_id}-${execution}.tgz
+        bucket: ${s3_bucket}
+        permissions: public-read
+        content_type: ${content_type|application/x-gzip}
+        display_name: mongoreplay Binary & ${client_artifacts} - Execution ${execution}
+        optional: true
+
+  "cleanup EC2 instances":
+    command: shell.exec
+    params:
+      working_dir: src
+      script: |
+        if [ -z ${client_instance_id} ] && [ -z ${server_instance_id} ]; then
+          exit 0
+        fi
+        ${activate_virtualenv}
+        for instance_id in ${client_instance_id} ${server_instance_id}
+        do
+          echo "Terminating $instance_id"
+          aws_ec2=$(python aws_ec2.py --imageId $instance_id --mode terminate)
+          echo "Terminated AMI EC2 instance: $aws_ec2"
+        done
+
   "start mongod":
     command: shell.exec
     params:
@@ -791,6 +1195,25 @@ pre:
         ${killall_mci|pkill -9 mongo; pkill -9 mongodump; pkill -9 mongoexport; pkill -9 mongoimport; pkill -9 mongofiles; pkill -9 mongooplog; pkill -9 mongorestore; pkill -9 mongostat; pkill -9 mongotop; pkill -9 mongod; pkill -9 mongos; pkill -f buildlogger.py; pkill -f smoke.py} >/dev/null 2>&1
         rm -rf src /data/db/*
         exit 0
+  - command: expansions.update
+    params:
+       updates:
+       - key: activate_virtualenv
+         value: |
+          # check if virtualenv is set up
+          if [ -d "venv" ]; then
+            if [ "Windows_NT" = "$OS" ]; then
+              . ./venv/Scripts/activate
+            else
+              . ./venv/bin/activate
+            fi
+          fi
+       # For ssh disable the options GSSAPIAuthentication, CheckHostIP, StrictHostKeyChecking
+       # & UserKnownHostsFile, since these are local connections from one AWS instance to another.
+       - key: ssh_connection_options
+         value: -o GSSAPIAuthentication=no -o CheckHostIP=no -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -o ConnectionAttempts=20
+       - key: ssh_retries
+         value: "10"
 
 post:
   - command: attach.results
@@ -804,6 +1227,7 @@ post:
           set -v
         ${killall_mci|pkill -9 mongo; pkill -9 mongodump; pkill -9 mongoexport; pkill -9 mongoimport; pkill -9 mongofiles; pkill -9 mongooplog; pkill -9 mongorestore; pkill -9 mongostat; pkill -9 mongotop; pkill -9 mongod; pkill -9 mongos; pkill -f buildlogger.py; pkill -f smoke.py} >/dev/null 2>&1
         exit 0
+  - func: "cleanup EC2 instances"
   - command: gotest.parse_files
     params:
       files: ["src/*.suite"]
@@ -1699,6 +2123,414 @@ tasks:
   - func: "create timeseries"
   - func: "upload timeseries"
 
+- name: replay_stress_1min
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_1min_10pct
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 1minsplit10_00.gob.gz
+      play_split_num: "10"
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_1min_cpu
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      proffile: cpu.profile
+      play_options: --fullSpeed --proffile=cpu.profile
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+      cpu_graph_file: cpu.svg
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_1min_cpu_mem
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      proffile: cpu.profile
+      memfile: mem.profile
+      play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_5min
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 5min.gob.gz
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_5min_10pct
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 5minsplit10_00.gob.gz
+      play_split_num: "10"
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_5min_cpu
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 5min.gob.gz
+      proffile: cpu.profile
+      play_options: --fullSpeed --proffile=cpu.profile
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+      cpu_graph_file: cpu.svg
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_5min_cpu_mem
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 5min.gob.gz
+      proffile: cpu.profile
+      memfile: mem.profile
+      play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_10min
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 10min.gob.gz
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_10min_10pct
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 10minsplit10_00.gob.gz
+      play_split_num: "10"
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_10min_cpu
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 10min.gob.gz
+      proffile: cpu.profile
+      play_options: --fullSpeed --proffile=cpu.profile
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+      cpu_graph_file: cpu.svg
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_10min_cpu_mem
+  depends_on:
+  - name: replay-dist
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 10min.gob.gz
+      proffile: cpu.profile
+      memfile: mem.profile
+      play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
+  - func: "generate graphs"
+    vars:
+      <<: *stress_graph
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
 buildvariants:
 #######################################
 #           macOS Buildvariant        #
@@ -1858,6 +2690,25 @@ buildvariants:
     edition: ssl
     integration_test_args: integration
   tasks: *ubuntu1604_ssl_tasks
+
+- name: rhel70_stress
+  display_name: RHEL 7.0 stress
+  run_on:
+  - rhel70
+  expansions:
+    <<: *mongod_default_startup_args
+    <<: *mongo_default_startup_args
+    mongo_os: "rhel70"
+    mongo_edition: "enterprise"
+    build_tags: "ssl sasl"
+    smoke_use_ssl: --use-ssl
+    resmoke_use_ssl: _ssl
+    arch: "linux/x86_64"
+    edition: enterprise
+    run_kinit: true
+    integration_test_args: integration
+    resmoke_args: --jobs $(grep -c ^processor /proc/cpuinfo)
+  tasks: *rhel70_stress_tasks
 
 #######################################
 #        Windows Buildvariants        #
