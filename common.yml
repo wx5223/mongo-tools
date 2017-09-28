@@ -296,8 +296,6 @@ variables:
     s3_url: https://s3.amazonaws.com/mciuploads/mongo-tools/stress/gobfiles
     gob_file: 1min.gob.gz
     create_split_gob_file: "0"
-    proffile:
-    memfile:
     log_file: mongoreplay.log
     play_split_num: "1"
     play_options: --fullSpeed
@@ -891,8 +889,8 @@ functions:
         working_dir: src
         script: |
           set -o errexit
-          cmds="if [ -z ${proffile} ] || [ ! -e ${proffile|nofile} ] ; then echo 'Not generating graph for proffile'; else export GOPATH=\$HOME/go_dev; export PATH=$PATH:\$HOME/FlameGraph; \$GOPATH/bin/go-torch -b ${proffile} -f ${cpu_graph_file}; fi"
-          cmds="$cmds; if [ -z ${memfile} ] || [ ! -e ${memfile|nofile} ] ; then echo 'Not generating graph for memfile'; else go tool pprof -alloc_space -svg ${memfile} > ${mem_graph_file}; fi"
+          cmds="if [ -z "${proffile}" ] || [ ! -e ${proffile|nofile} ] ; then echo 'Not generating graph for proffile'; else export GOPATH=\$HOME/go_dev; export PATH=$PATH:\$HOME/FlameGraph; \$GOPATH/bin/go-torch -b ${proffile} -f ${cpu_graph_file}; fi"
+          cmds="$cmds; if [ -z "${memfile}" ] || [ ! -e ${memfile|nofile} ] ; then echo 'Not generating graph for memfile'; else go tool pprof -alloc_space -svg ${memfile} > ${mem_graph_file}; fi"
           ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
           ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
             --verbose                                        \
@@ -986,7 +984,7 @@ functions:
     params:
       working_dir: src
       script: |
-        if [ -z ${client_instance_id} ] && [ -z ${server_instance_id} ]; then
+        if [ -z "${client_instance_id}" ] && [ -z "${server_instance_id}" ]; then
           exit 0
         fi
         ${activate_virtualenv}
