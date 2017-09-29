@@ -72,11 +72,14 @@ class AwsEc2(object):
                 getattr(instance, "instance_id", None),
                 getattr(instance, "image_id", None),
                 getattr(instance, "instance_type", None),
-                dict(getattr(instance, "state", None).items() +
-                     getattr(instance, "state_reason", None).items()),
+                getattr(instance, "state", None),
                 getattr(instance, "private_ip_address", None),
                 getattr(instance, "public_ip_address", None),
                 getattr(instance, "tags", None))
+            # TODO add state_reason
+            # state_reason = getattr(instance, "state_reason", None)
+            # if state_reason:
+            #   status["state_reason"] = dict(status["state_reason"].items() + state_reason.items())
         except botocore.exceptions.ClientError as e:
             return 1, e.message
 
