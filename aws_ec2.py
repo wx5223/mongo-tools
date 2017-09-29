@@ -22,7 +22,13 @@ class AwsEc2(object):
 
     InstanceStatus = collections.namedtuple(
         "InstanceStatus",
-        "instance_id image_id instance_type state private_ip_address public_ip_address tags")
+        """instance_id
+           image_id
+           instance_type
+           state_and_reason
+           private_ip_address
+           public_ip_address
+           tags""")
 
     def __init__(self, aws_key_id=None, aws_secret_key=None):
         if aws_key_id and aws_secret_key:
@@ -66,7 +72,8 @@ class AwsEc2(object):
                 getattr(instance, "instance_id", None),
                 getattr(instance, "image_id", None),
                 getattr(instance, "instance_type", None),
-                getattr(instance, "state", None),
+                dict(getattr(instance, "state", None).items() +
+                     getattr(instance, "state_reason", None).items()),
                 getattr(instance, "private_ip_address", None),
                 getattr(instance, "public_ip_address", None),
                 getattr(instance, "tags", None))

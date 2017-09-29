@@ -230,7 +230,7 @@ mongo_tools_variables:
       - name: qa-tests-unstable
       - name: qa-tests-wt
       - name: native-cert-ssl
-    rhel70_stress_task_list: &rhel70_stress_tasks
+    rhel_stress_task_list: &rhel_stress_tasks
       - name: replay-dist
       - name: replay_stress_1min
       - name: replay_stress_1min_10pct
@@ -650,7 +650,7 @@ functions:
   "set up remote credentials":
     command: shell.exec
     params:
-      # silent: true
+      silent: true
       script: |
         set -o errexit
 
@@ -659,8 +659,6 @@ functions:
           echo -n "${private_key_remote}" > ${private_key_file|/dev/null}
           chmod 0600 ${private_key_file|/dev/null}
         fi
-
-        echo "Private key file ${private_key_file}: $(cat ${private_key_file})"
 
         mkdir -p ~/.aws
         cat <<EOF > ~/.aws/config
@@ -702,6 +700,7 @@ functions:
         script: |
 
           set -o errexit
+          set -x
           ${activate_virtualenv}
           easy_install --upgrade boto3
 
@@ -711,7 +710,7 @@ functions:
           done
 
           # Create new instance for test client.
-          bash launch_evergreen_ec2_instance.sh   \
+          bash -x launch_evergreen_ec2_instance.sh   \
             -a ${ami}                             \
             -d xvdf/3072/gp2/0                    \
             -i c3.4xlarge                         \
@@ -722,7 +721,7 @@ functions:
             -y ${aws_ec2_client_yml}
 
           # Create new instance for test server.
-          bash launch_evergreen_ec2_instance.sh   \
+          bash -x launch_evergreen_ec2_instance.sh   \
             -a ${ami}                             \
             -d xvdf/500/io1/10000                 \
             -i c3.4xlarge                         \
@@ -2658,15 +2657,15 @@ buildvariants:
 #     integration_test_args: integration
 #   tasks: *ubuntu1604_ssl_tasks
 
-- name: rhel70_stress
+- name: rhel_stress
   display_name: RHEL stress
   run_on:
-  - rhel70-small
+  # - rhel70-small
   - rhel70
-  - rhel62-test
-  - rhel62-build
-  - rhel62-large
-  - rhel62-small
+  # - rhel62-test
+  # - rhel62-build
+  # - rhel62-large
+  # - rhel62-small
   expansions:
     <<: *mongod_default_startup_args
     <<: *mongo_default_startup_args
@@ -2680,7 +2679,7 @@ buildvariants:
     run_kinit: true
     integration_test_args: integration
     resmoke_args: --jobs $(grep -c ^processor /proc/cpuinfo)
-  tasks: *rhel70_stress_tasks
+  tasks: *rhel_stress_tasks
 
 #######################################
 #        Windows Buildvariants        #
