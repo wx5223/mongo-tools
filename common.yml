@@ -301,10 +301,6 @@ variables:
     play_options: --fullSpeed
     playback_file: /data/mongoreplay.gob
 
-- &stress_graph
-    cpu_graph_file:
-    mem_graph_file:
-
 - &stress_files
     server_artifacts: ${log_path} ${db_path}/diagnostic.data
     client_artifacts: ${log_file} ${proffile} ${memfile} ${cpu_graph_file} ${mem_graph_file}
@@ -867,7 +863,7 @@ functions:
         working_dir: src
         script: |
           set -o errexit
-            cmds="curl -s ${s3_url}/${gob_file} | gunzip -c > ${playback_file}"
+            cmds="curl -s ${s3_url}/${gob_file} | gunzip -c > ${playback_file|/dev/null}"
           if [ ${create_split_gob_file|0} -eq 1 ]; then
             cmds="$cmds; if [ ${play_split_num|1} -gt 1 ]; then echo 'Using first split file from ${play_split_num} files' | tee -a ${log_file}; ./mongoreplay filter -p ${playback_file} --outfilePrefix=playfile --split=${play_split_num}; mv playfile00.playback ${playback_file}; fi"
           fi
@@ -889,8 +885,8 @@ functions:
         working_dir: src
         script: |
           set -o errexit
-          cmds="if [ -z "${proffile}" ] || [ ! -e ${proffile|nofile} ] ; then echo 'Not generating graph for proffile'; else export GOPATH=\$HOME/go_dev; export PATH=$PATH:\$HOME/FlameGraph; \$GOPATH/bin/go-torch -b ${proffile} -f ${cpu_graph_file}; fi"
-          cmds="$cmds; if [ -z "${memfile}" ] || [ ! -e ${memfile|nofile} ] ; then echo 'Not generating graph for memfile'; else go tool pprof -alloc_space -svg ${memfile} > ${mem_graph_file}; fi"
+          cmds="if [ -z ${proffile|''} ] || [ ! -e ${proffile|nofile} ] ; then echo 'Not generating graph for proffile'; else export GOPATH=\$HOME/go_dev; export PATH=$PATH:\$HOME/FlameGraph; \$GOPATH/bin/go-torch -b ${proffile} -f ${cpu_graph_file}; fi"
+          cmds="$cmds; if [ -z ${memfile|''} ] || [ ! -e ${memfile|nofile} ] ; then echo 'Not generating graph for memfile'; else go tool pprof -alloc_space -svg ${memfile} > ${mem_graph_file|/dev/null}; fi"
           ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
           ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
             --verbose                                        \
@@ -2145,9 +2141,6 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-  - func: "generate graphs"
-    vars:
-      <<: *stress_graph
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2178,9 +2171,6 @@ tasks:
       <<: *stress_test
       gob_file: 1minsplit10_00.gob.gz
       play_split_num: "10"
-  - func: "generate graphs"
-    vars:
-      <<: *stress_graph
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2213,7 +2203,6 @@ tasks:
       play_options: --fullSpeed --proffile=cpu.profile
   - func: "generate graphs"
     vars:
-      <<: *stress_graph
       cpu_graph_file: cpu.svg
   - func: "push remote files"
     vars:
@@ -2248,7 +2237,6 @@ tasks:
       play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
   - func: "generate graphs"
     vars:
-      <<: *stress_graph
       cpu_graph_file: cpu.svg
       mem_graph_file: mem.svg
   - func: "push remote files"
@@ -2280,9 +2268,6 @@ tasks:
     vars:
       <<: *stress_test
       gob_file: 5min.gob.gz
-  - func: "generate graphs"
-    vars:
-      <<: *stress_graph
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2313,9 +2298,6 @@ tasks:
       <<: *stress_test
       gob_file: 5minsplit10_00.gob.gz
       play_split_num: "10"
-  - func: "generate graphs"
-    vars:
-      <<: *stress_graph
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2349,7 +2331,6 @@ tasks:
       play_options: --fullSpeed --proffile=cpu.profile
   - func: "generate graphs"
     vars:
-      <<: *stress_graph
       cpu_graph_file: cpu.svg
   - func: "push remote files"
     vars:
@@ -2385,7 +2366,6 @@ tasks:
       play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
   - func: "generate graphs"
     vars:
-      <<: *stress_graph
       cpu_graph_file: cpu.svg
       mem_graph_file: mem.svg
   - func: "push remote files"
@@ -2417,9 +2397,6 @@ tasks:
     vars:
       <<: *stress_test
       gob_file: 10min.gob.gz
-  - func: "generate graphs"
-    vars:
-      <<: *stress_graph
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2450,9 +2427,6 @@ tasks:
       <<: *stress_test
       gob_file: 10minsplit10_00.gob.gz
       play_split_num: "10"
-  - func: "generate graphs"
-    vars:
-      <<: *stress_graph
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2484,10 +2458,6 @@ tasks:
       gob_file: 10min.gob.gz
       proffile: cpu.profile
       play_options: --fullSpeed --proffile=cpu.profile
-  - func: "generate graphs"
-    vars:
-      <<: *stress_graph
-      cpu_graph_file: cpu.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2522,7 +2492,6 @@ tasks:
       play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
   - func: "generate graphs"
     vars:
-      <<: *stress_graph
       cpu_graph_file: cpu.svg
       mem_graph_file: mem.svg
   - func: "push remote files"
