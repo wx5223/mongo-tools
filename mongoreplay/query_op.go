@@ -137,12 +137,24 @@ func (op *QueryOp) FromReader(r io.Reader) error {
 	}
 	currentRead := len(queryAsSlice) + len(op.Collection) + 1 + 12 + MsgHeaderLen
 	if int(op.Header.MessageLength) > currentRead {
-		selectorAsSlice, err := ReadDocument(r)
+		sizeRaw := make([]byte, 4)
+		if _, err = io.ReadFull(r, sizeRaw); err != nil {
+			return err
+		}
+		size := getInt32(sizeRaw, 0)
+		if size < 5 || size > maximumDocumentSize {
+			return ErrInvalidSize
+		}
+		doc := make([]byte, size)
+		copy(doc, sizeRaw)
+
+		_, err = io.ReadFull(r, doc[4:])
 		if err != nil {
 			return err
 		}
+
 		op.Selector = &bson.RawD{}
-		err = bson.Unmarshal(selectorAsSlice, op.Selector)
+		err = bson.Unmarshal(doc, op.Selector)
 		if err != nil {
 			return err
 		}

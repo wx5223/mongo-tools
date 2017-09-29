@@ -85,6 +85,13 @@ func ReadDocument(r io.Reader) (doc []byte, err error) {
 	return
 }
 
+// ReadDocument read an entire BSON document. This document can be used with
+// bson.Unmarshal.
+func ReadDocumentInto(r io.Reader, doc []byte) (err error) {
+	_, err = io.ReadFull(r, doc[4:])
+	return
+}
+
 func getCommandName(rawOp *RawOp) (string, error) {
 	if rawOp.Header.OpCode != OpCodeCommand {
 		return "", fmt.Errorf("getCommandName received wrong opType: %v", rawOp.Header.OpCode)
