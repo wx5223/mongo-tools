@@ -90,6 +90,24 @@ func (op *DeleteOp) FromReader(r io.Reader) error {
 	return nil
 }
 
+func (op *DeleteOp) FromSlice(s []byte) error {
+	offset := 4
+
+	name, length := readCStringWithLength(s[offset:])
+	op.Collection = name
+	offset += length
+
+	op.Flags = uint32(getInt32(s[offset:], 0))
+	offset += 4
+
+	op.Selector = &bson.D{}
+	_, err := FetchDocument(s, offset, op.Selector)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Execute performs the DeleteOp on a given session, yielding the reply when
 // successful (and an error otherwise).
 func (op *DeleteOp) Execute(socket *mgo.MongoSocket) (Replyable, error) {

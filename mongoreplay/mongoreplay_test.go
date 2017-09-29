@@ -116,10 +116,10 @@ func TestInsertOp(t *testing.T) {
 
 	for i, doc := range insertOp.Documents {
 		marshaled, _ := bson.Marshal(documents[i])
-		unmarshaled := &bson.D{}
+		unmarshaled := &bson.Raw{}
 		bson.Unmarshal(marshaled, unmarshaled)
-		if !reflect.DeepEqual(unmarshaled, doc) {
-			t.Errorf("Document not matched. Saw %v -- Expected %v\n", unmarshaled, doc)
+		if !reflect.DeepEqual(*unmarshaled, doc) {
+			t.Errorf("Document not matched. Saw %v -- Expected %v\n", *unmarshaled, doc)
 		}
 	}
 }
@@ -157,8 +157,16 @@ func TestQueryOp(t *testing.T) {
 	op.HasOptions = true
 	op.Limit = -1
 	op.Skip = 0
-	selector := bson.D{{"test", 1}}
-	op.Selector = selector
+
+	selector := map[string]int{
+		"test": 1,
+	}
+	doc, err := bson.Marshal(selector)
+	if err != nil {
+		t.Error(err)
+	}
+	op.Selector = &bson.Raw{}
+	bson.Unmarshal(doc, op.Selector)
 	options := mgo.QueryWrapper{}
 	options.Explain = false
 	options.OrderBy = &bson.D{{"_id", 1}}
@@ -180,8 +188,8 @@ func TestQueryOp(t *testing.T) {
 	switch {
 	case queryOp.Collection != op.Collection:
 		t.Errorf("Collections not equal. Saw %v -- Expected %v\n", queryOp.Collection, op.Collection)
-	case !reflect.DeepEqual(&selector, queryOp.Selector):
-		t.Errorf("Selectors not equal. Saw %v -- Expected %v\n", queryOp.Selector, &selector)
+	case !reflect.DeepEqual(queryOp.Selector, op.Selector):
+		t.Errorf("Selectors not equal. Saw %v -- Expected %v\n", queryOp.Selector, op.Selector)
 	case queryOp.Flags != op.Flags:
 		t.Errorf("Flags not equal. Saw %d -- Expected %d\n", queryOp.Flags, op.Flags)
 	case queryOp.Skip != op.Skip:
@@ -196,11 +204,30 @@ func TestOpUpdate(t *testing.T) {
 	generator := newRecordedOpGenerator()
 
 	op := UpdateOp{}
-	selector := bson.D{{"test", 1}}
-	op.Selector = selector
-	change := bson.D{{"updated", true}}
+	// Selector
+	selector := map[string]int{
+		"test": 1,
+	}
+	doc, err := bson.Marshal(selector)
+	if err != nil {
+		t.Error(err)
+	}
+
+	op.Selector = &bson.Raw{}
+	bson.Unmarshal(doc, op.Selector)
+
+	// Update
+	change := map[string]bool{
+		"updated": true,
+	}
 	update := bson.D{{"$set", change}}
-	op.Update = update
+	doc, err = bson.Marshal(update)
+	if err != nil {
+		t.Error(err)
+	}
+	op.Update = &bson.Raw{}
+	bson.Unmarshal(doc, op.Update)
+
 	op.Collection = "mongoreplay_test.test"
 	op.Flags = 12345
 
@@ -220,10 +247,10 @@ func TestOpUpdate(t *testing.T) {
 	switch {
 	case updateOp.Collection != op.Collection:
 		t.Errorf("Collections not equal. Saw %v -- Expected %v\n", updateOp.Collection, op.Collection)
-	case !reflect.DeepEqual(updateOp.Selector, &selector):
-		t.Errorf("Selectors not equal. Saw %v -- Expected %v\n", updateOp.Selector, &selector)
-	case !reflect.DeepEqual(updateOp.Update, &update):
-		t.Errorf("Updates not equal. Saw %v -- Expected %v\n", updateOp.Update, &update)
+	case !reflect.DeepEqual(updateOp.Selector, op.Selector):
+		t.Errorf("Selectors not equal. Saw %v -- Expected %v\n", updateOp.Selector, op.Selector)
+	case !reflect.DeepEqual(updateOp.Update, op.Update):
+		t.Errorf("Updates not equal. Saw %v -- Expected %v\n", updateOp.Update, op.Update)
 	case updateOp.Flags != op.Flags:
 		t.Errorf("Flags not equal. Saw %d -- Expected %d\n", updateOp.Flags, op.Flags)
 	}
@@ -235,14 +262,42 @@ func TestCommandOp(t *testing.T) {
 	op := CommandOp{}
 	op.Database = "foo"
 	op.CommandName = "query"
-	metadata := bson.D{{"metadata", 1}}
-	op.Metadata = metadata
-	change := bson.D{{"updated", true}}
+	// Metadata
+	metadata := map[string]int{
+		"metadata": 1,
+	}
+	doc, err := bson.Marshal(metadata)
+	if err != nil {
+		t.Error(err)
+	}
+	op.Metadata = &bson.Raw{}
+	bson.Unmarshal(doc, op.Metadata)
+
+	//CommandArgs
+	change := map[string]bool{
+		"updated": true,
+	}
 	commandArgs := bson.D{{"$set", change}}
-	op.CommandArgs = commandArgs
+	doc, err = bson.Marshal(commandArgs)
+	if err != nil {
+		t.Error(err)
+	}
+	op.CommandArgs = &bson.Raw{}
+	bson.Unmarshal(doc, op.CommandArgs)
+
+	//InputDocs
 	inputDocs := []interface{}{}
 	for i := 0; i < 5; i++ {
-		inputDocs = append(inputDocs, &bson.D{{"inputDoc", 1}})
+		inputDocMap := map[string]bool{
+			"updated": true,
+		}
+		inputDoc := &bson.Raw{}
+		doc, err := bson.Marshal(inputDocMap)
+		if err != nil {
+			t.Error(err)
+		}
+		bson.Unmarshal(doc, inputDoc)
+		inputDocs = append(inputDocs, inputDoc)
 	}
 
 	op.InputDocs = inputDocs
@@ -260,24 +315,16 @@ func TestCommandOp(t *testing.T) {
 
 	commandOp := receivedOp.(*CommandOp)
 
-	metadataAsBytes, _ := bson.Marshal(metadata)
-	metadataRaw := &bson.Raw{}
-	bson.Unmarshal(metadataAsBytes, metadataRaw)
-
-	commandArgsAsBytes, _ := bson.Marshal(commandArgs)
-	commandArgsRaw := &bson.Raw{}
-	bson.Unmarshal(commandArgsAsBytes, commandArgsRaw)
-
 	t.Log("Comparing parsed Command to original Command")
 	switch {
 	case commandOp.Database != op.Database:
 		t.Errorf("Databases not equal. Saw %v -- Expected %v\n", commandOp.Database, op.Database)
 	case commandOp.CommandName != op.CommandName:
 		t.Errorf("CommandNames not equal. Saw %v -- Expected %v\n", commandOp.CommandName, op.CommandName)
-	case !reflect.DeepEqual(commandOp.Metadata, metadataRaw):
-		t.Errorf("Metadata not equal. Saw %v -- Expected %v\n", commandOp.Metadata, metadataRaw)
-	case !reflect.DeepEqual(commandOp.CommandArgs, commandArgsRaw):
-		t.Errorf("CommandArgs not equal. Saw %v -- Expected %v\n", commandOp.CommandArgs, commandArgsRaw)
+	case !reflect.DeepEqual(commandOp.Metadata, op.Metadata):
+		t.Errorf("Metadata not equal. Saw %v -- Expected %v\n", commandOp.Metadata, op.Metadata)
+	case !reflect.DeepEqual(commandOp.CommandArgs, op.CommandArgs):
+		t.Errorf("CommandArgs not equal. Saw %v -- Expected %v\n", commandOp.CommandArgs, op.CommandArgs)
 	}
 	for i, doc := range commandOp.InputDocs {
 		marshaledAsBytes, _ := bson.Marshal(inputDocs[i])

@@ -63,6 +63,18 @@ func (op *KillCursorsOp) FromReader(r io.Reader) error {
 	return nil
 }
 
+func (op *KillCursorsOp) FromSlice(s []byte) error {
+	offset := 4
+	numCursors := uint32(getInt32(s[offset:], 0))
+	offset += 4
+	var i uint32
+	for i = 0; i < numCursors; i++ {
+		op.CursorIds = append(op.CursorIds, getInt64(s[offset:], 0))
+		offset += 8
+	}
+	return nil
+}
+
 // Execute performs the KillCursorsOp on a given session, yielding the reply
 // when successful (and an error otherwise).
 func (op *KillCursorsOp) Execute(socket *mgo.MongoSocket) (Replyable, error) {

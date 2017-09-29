@@ -85,6 +85,27 @@ func ReadDocument(r io.Reader) (doc []byte, err error) {
 	return
 }
 
+func FetchDocument(s []byte, offset int, out interface{}) (int32, error) {
+	if len(s) < offset {
+		return 0, fmt.Errorf("slice too small")
+	}
+	docSize := getInt32(s[offset:], 0)
+
+	if docSize < 5 || docSize > maximumDocumentSize {
+		return 0, ErrInvalidSize
+	}
+	if len(s) < int(docSize)+offset {
+		return 0, fmt.Errorf("slice too small")
+	}
+
+	doc := s[offset : offset+int(docSize)]
+	err := bson.Unmarshal(doc, out)
+	if err != nil {
+		return 0, err
+	}
+	return docSize, nil
+}
+
 func getCommandName(rawOp *RawOp) (string, error) {
 	if rawOp.Header.OpCode != OpCodeCommand {
 		return "", fmt.Errorf("getCommandName received wrong opType: %v", rawOp.Header.OpCode)
@@ -178,6 +199,14 @@ func readCString(b []byte) string {
 		}
 	}
 	return ""
+}
+func readCStringWithLength(b []byte) (string, int) {
+	for i := 0; i < len(b); i++ {
+		if b[i] == 0 {
+			return string(b[:i]), i + 1
+		}
+	}
+	return "", 0
 }
 
 // retrieves a 32 bit into from the given byte array whose first byte is in position pos

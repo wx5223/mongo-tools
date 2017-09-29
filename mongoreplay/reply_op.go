@@ -96,6 +96,34 @@ func (op *ReplyOp) FromReader(r io.Reader) error {
 	return nil
 }
 
+// FromSlice extracts data from a serialized ReplyOp into its concrete structure.
+func (op *ReplyOp) FromSlice(s []byte) error {
+	sliceOffset := 0
+	op.Flags = uint32(getInt32(s[:], 0))
+	op.CursorId = getInt64(s[:], 4)
+	op.FirstDoc = getInt32(s[:], 12)
+	op.ReplyDocs = getInt32(s[:], 16)
+	op.Docs = []bson.Raw{}
+	sliceOffset += 20
+
+	// read as many docs as we can from the reader
+	for len(s) > sliceOffset {
+		nextDoc := bson.Raw{}
+		size, err := FetchDocument(s, sliceOffset, &nextDoc)
+		if err != nil {
+			if err != io.EOF {
+				// Broken BSON in reply data. TODO log something here?
+				return err
+			}
+			break
+		}
+		op.Docs = append(op.Docs, nextDoc)
+		sliceOffset += int(size)
+	}
+
+	return nil
+}
+
 // Execute performs the ReplyOp on a given socket, yielding the reply when
 // successful (and an error otherwise).
 func (op *ReplyOp) Execute(socket *mgo.MongoSocket) (Replyable, error) {

@@ -141,8 +141,38 @@ func (op *QueryOp) FromReader(r io.Reader) error {
 		if err != nil {
 			return err
 		}
-		op.Selector = &bson.D{}
+		op.Selector = &bson.RawD{}
 		err = bson.Unmarshal(selectorAsSlice, op.Selector)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (op *QueryOp) FromSlice(s []byte) error {
+	sliceOffset := 0
+	op.Flags = mgo.QueryOpFlags(getInt32(s[:4], 0))
+	sliceOffset += 4
+	name, length := readCStringWithLength(s[sliceOffset:])
+	sliceOffset += length
+	op.Collection = string(name)
+
+	op.Skip = getInt32(s[sliceOffset:], 0)
+	op.Limit = getInt32(s[sliceOffset:], 4)
+	sliceOffset += 8
+
+	querySize := getInt32(s[sliceOffset:], 0)
+
+	op.Query = &bson.Raw{}
+	err := bson.Unmarshal(s[sliceOffset:sliceOffset+int(querySize)], op.Query)
+	if err != nil {
+		return err
+	}
+	sliceOffset += int(querySize)
+	if len(s) > sliceOffset {
+		op.Selector = &bson.Raw{}
+		_, err = FetchDocument(s, sliceOffset, op.Selector)
 		if err != nil {
 			return err
 		}

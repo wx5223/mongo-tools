@@ -81,6 +81,16 @@ func (op *GetMoreOp) FromReader(r io.Reader) error {
 	return nil
 }
 
+func (op *GetMoreOp) FromSlice(s []byte) error {
+	offset := 4
+	name, length := readCStringWithLength(s[offset:])
+	op.Collection = name
+	offset += length
+	op.Limit = getInt32(s[offset:], 0)
+	op.CursorId = getInt64(s[offset:], 4)
+	return nil
+}
+
 // Execute performs the GetMoreOp on a given session, yielding the reply when
 // successful (and an error otherwise).
 func (op *GetMoreOp) Execute(socket *mgo.MongoSocket) (Replyable, error) {

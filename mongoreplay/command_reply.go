@@ -171,6 +171,34 @@ func (op *CommandReplyOp) FromReader(r io.Reader) error {
 	}
 	return nil
 }
+func (op *CommandReplyOp) FromSlice(s []byte) error {
+	offset := 0
+	op.CommandReply = &bson.Raw{}
+	size, err := FetchDocument(s, offset, op.CommandReply)
+	if err != nil {
+		return err
+	}
+	offset += int(size)
+
+	op.Metadata = &bson.Raw{}
+	size, err = FetchDocument(s, offset, op.Metadata)
+	if err != nil {
+		return err
+	}
+
+	offset += int(size)
+	op.OutputDocs = make([]interface{}, 0)
+	for len(s) > offset {
+		doc := &bson.Raw{}
+		size, err := FetchDocument(s, offset, doc)
+		if err != nil {
+			return err
+		}
+		op.OutputDocs = append(op.OutputDocs, doc)
+		offset += int(size)
+	}
+	return nil
+}
 
 // Execute logs a warning and returns nil because OP_COMMANDREPLY cannot yet be
 // handled fully by mongoreplay.
