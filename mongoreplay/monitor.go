@@ -32,9 +32,8 @@ type UnresolvedOpInfo struct {
 // reply.
 func (gen *RegularStatGenerator) AddUnresolvedOp(op *RecordedOp, parsedOp Op, requestStat *OpStat) {
 	gen.UnresolvedOps[opKey{
-		driverEndpoint: op.SrcEndpoint,
-		serverEndpoint: op.DstEndpoint,
-		opID:           op.Header.RequestID,
+		connectionNum: op.SeenConnectionNum,
+		opID:          op.Header.RequestID,
 	}] = UnresolvedOpInfo{
 		Stat:     requestStat,
 		Op:       op,
@@ -56,9 +55,8 @@ func (gen *RegularStatGenerator) ResolveOp(recordedReply *RecordedOp, reply Repl
 	result := &OpStat{}
 
 	key := opKey{
-		driverEndpoint: recordedReply.DstEndpoint,
-		serverEndpoint: recordedReply.SrcEndpoint,
-		opID:           recordedReply.Header.ResponseTo,
+		connectionNum: recordedReply.SeenConnectionNum,
+		opID:          recordedReply.Header.ResponseTo,
 	}
 	originalOpInfo, foundOriginal := gen.UnresolvedOps[key]
 	if !foundOriginal {

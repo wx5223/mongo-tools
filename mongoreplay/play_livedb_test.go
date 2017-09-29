@@ -2,6 +2,7 @@ package mongoreplay
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -1199,7 +1200,7 @@ func (generator *recordedOpGenerator) generateGetMore(cursorID int64, limit int3
 }
 
 // generateReply creates a RecordedOp reply using the given responseTo,
-// cursorID, and firstDOc, and pushes it to the recordedOpGenerator's channel to
+// cursorID, and firstDoc, and pushes it to the recordedOpGenerator's channel to
 // be executed when Play() is called
 func (generator *recordedOpGenerator) generateReply(responseTo int32, cursorID int64, firstDoc int32) error {
 	reply := mgo.ReplyOp{
@@ -1215,10 +1216,7 @@ func (generator *recordedOpGenerator) generateReply(responseTo int32, cursorID i
 	}
 
 	recordedOp.RawOp.Header.ResponseTo = responseTo
-	SetInt64(recordedOp.RawOp.Body, 4, cursorID) // change the cursorID field in the RawOp.Body
-	tempEnd := recordedOp.SrcEndpoint
-	recordedOp.SrcEndpoint = recordedOp.DstEndpoint
-	recordedOp.DstEndpoint = tempEnd
+	setInt64(recordedOp.RawOp.Body, 4, cursorID) // change the cursorID field in the RawOp.Body
 	generator.pushDriverRequestOps(recordedOp)
 	return nil
 }
@@ -1243,9 +1241,6 @@ func (generator *recordedOpGenerator) generateCommandReply(responseTo int32, cur
 	}
 
 	recordedOp.RawOp.Header.ResponseTo = responseTo
-	tempEnd := recordedOp.SrcEndpoint
-	recordedOp.SrcEndpoint = recordedOp.DstEndpoint
-	recordedOp.DstEndpoint = tempEnd
 	generator.pushDriverRequestOps(recordedOp)
 	return nil
 }
@@ -1279,15 +1274,20 @@ func (generator *recordedOpGenerator) fetchRecordedOpsFromConn(op interface{}) (
 	if err != nil {
 		return nil, fmt.Errorf("Socket.Query: %v\n", err)
 	}
-	msg, err := ReadHeader(generator.serverConnection)
-	if err != nil {
-		return nil, fmt.Errorf("ReadHeader Error: %v\n", err)
+	headerBuf := [MsgHeaderLen]byte{}
+	if _, err := io.ReadFull(generator.serverConnection, headerBuf[:]); err != nil {
+		return nil, err
 	}
-	result := RawOp{Header: *msg}
+	header := MsgHeader{}
+	header.FromWire(headerBuf[:])
+
+	result := RawOp{Header: header}
 	result.Body = make([]byte, MsgHeaderLen)
+	copy(result.Body[:MsgHeaderLen], headerBuf[:])
+
 	result.FromReader(generator.serverConnection)
 
-	recordedOp := &RecordedOp{RawOp: result, Seen: &PreciseTime{testTime}, SrcEndpoint: "a", DstEndpoint: "b", PlayedAt: &PreciseTime{}}
+	recordedOp := &RecordedOp{RawOp: result, Seen: testTime, SeenConnectionNum: 0}
 
 	d, _ := time.ParseDuration("2ms")
 	testTime = testTime.Add(d)

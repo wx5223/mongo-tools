@@ -1,7 +1,6 @@
 package mongoreplay
 
 import (
-	//	"bytes"
 	"fmt"
 	"io"
 
@@ -10,6 +9,13 @@ import (
 )
 
 const maxBSONSize = 16 * 1024 * 1024 // 16MB - maximum BSON document size
+
+var EmptyRawOp = RawOp{
+	Header: MsgHeader{
+		MessageLength: 16,
+	},
+	Body: []byte{16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+}
 
 // RawOp may be exactly the same as OpUnknown.
 type RawOp struct {
@@ -121,7 +127,7 @@ func (op *RawOp) ShortenReply() error {
 		copy(newBody[MsgHeaderLen:], out)
 		copy(newBody[MsgHeaderLen+newCommandReplySize:], op.Body[MsgHeaderLen+commandReplySize:])
 		// update the size of this message in the headers
-		SetInt32(newBody, 0, newSize)
+		setInt32(newBody, 0, newSize)
 		op.Header.MessageLength = newSize
 		op.Body = newBody
 
@@ -165,13 +171,6 @@ func (op *RawOp) Parse() (Op, error) {
 	default:
 		return nil, nil
 	}
-	/*
-		reader := bytes.NewReader(op.Body[MsgHeaderLen:])
-		err := parsedOp.FromReader(reader)
-		if err != nil {
-			return nil, err
-		}
-	*/
 
 	err := parsedOp.FromSlice(op.Body[MsgHeaderLen:])
 	if err != nil {

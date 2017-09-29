@@ -114,7 +114,7 @@ LOOP:
 		if first {
 			first = false
 			if truncateDuration.Nanoseconds() != 0 {
-				durationFilter := durationFilterFactory(truncateDuration, op.Seen.Time)
+				durationFilter := durationFilterFactory(truncateDuration, op.Seen)
 				filterFuncs = append(filterFuncs, durationFilter)
 			}
 		}
@@ -210,13 +210,13 @@ func filterDriverOps(op *RecordedOp) (bool, error) {
 
 func pretruncateFilterFactory(initialTime time.Time) filterFunc {
 	return func(op *RecordedOp) (bool, error) {
-		return op.Seen.Time.Before(initialTime), nil
+		return op.Seen.Before(initialTime), nil
 	}
 }
 
 func durationFilterFactory(d time.Duration, initialTime time.Time) filterFunc {
 	endTime := initialTime.Add(d)
 	return func(op *RecordedOp) (bool, error) {
-		return op.Seen.Time.After(endTime), nil
+		return op.Seen.After(endTime), nil
 	}
 }
