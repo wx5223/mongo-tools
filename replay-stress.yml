@@ -2659,9 +2659,14 @@ buildvariants:
 #   tasks: *ubuntu1604_ssl_tasks
 
 - name: rhel70_stress
-  display_name: RHEL 7.0 stress
+  display_name: RHEL stress
   run_on:
+  - rhel70-small
   - rhel70
+  - rhel62-test
+  - rhel62-build
+  - rhel62-large
+  - rhel62-small
   expansions:
     <<: *mongod_default_startup_args
     <<: *mongo_default_startup_args
