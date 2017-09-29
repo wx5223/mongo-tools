@@ -141,7 +141,7 @@ func (op *QueryOp) FromReader(r io.Reader) error {
 		if err != nil {
 			return err
 		}
-		op.Selector = &bson.D{}
+		op.Selector = &bson.RawD{}
 		err = bson.Unmarshal(selectorAsSlice, op.Selector)
 		if err != nil {
 			return err
