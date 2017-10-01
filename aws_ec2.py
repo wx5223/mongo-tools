@@ -68,18 +68,18 @@ class AwsEc2(object):
 
         try:
             # Always provide status after executing command.
+            state = getattr(instance, "state", None)
+            state_reason = getattr(instance, "state_reason", None)
+            if state_reason:
+                state = dict(state.items() + state_reason.items())
             status = self.InstanceStatus(
                 getattr(instance, "instance_id", None),
                 getattr(instance, "image_id", None),
                 getattr(instance, "instance_type", None),
-                getattr(instance, "state", None),
+                state,
                 getattr(instance, "private_ip_address", None),
                 getattr(instance, "public_ip_address", None),
                 getattr(instance, "tags", None))
-            # TODO add state_reason
-            # state_reason = getattr(instance, "state_reason", None)
-            # if state_reason:
-            #   status["state_reason"] = dict(status["state_reason"].items() + state_reason.items())
         except botocore.exceptions.ClientError as e:
             return 1, e.message
 

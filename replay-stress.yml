@@ -700,7 +700,6 @@ functions:
         script: |
 
           set -o errexit
-          set -x
           ${activate_virtualenv}
           easy_install --upgrade boto3
 
@@ -710,7 +709,7 @@ functions:
           done
 
           # Create new instance for test client.
-          bash -x launch_evergreen_ec2_instance.sh   \
+          bash launch_evergreen_ec2_instance.sh   \
             -a ${ami}                             \
             -d xvdf/3072/gp2/0                    \
             -i c3.4xlarge                         \
@@ -721,7 +720,7 @@ functions:
             -y ${aws_ec2_client_yml}
 
           # Create new instance for test server.
-          bash -x launch_evergreen_ec2_instance.sh   \
+          bash launch_evergreen_ec2_instance.sh   \
             -a ${ami}                             \
             -d xvdf/500/io1/10000                 \
             -i c3.4xlarge                         \
