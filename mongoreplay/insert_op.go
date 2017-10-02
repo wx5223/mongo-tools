@@ -86,6 +86,27 @@ func (op *InsertOp) FromReader(r io.Reader) error {
 	}
 	return nil
 }
+func (op *InsertOp) FromSlice(s []byte) error {
+	offset := 0
+	op.Flags = uint32(getInt32(s[:], 0))
+
+	offset += 4
+	name, length := readCStringWithLength(s[offset:])
+	op.Collection = name
+	offset += length
+
+	op.Documents = make([]interface{}, 0)
+	for len(s) > offset {
+		nextDoc := bson.Raw{}
+		size, err := FetchDocument(s, offset, &nextDoc)
+		if err != nil {
+			return err
+		}
+		offset += int(size)
+		op.Documents = append(op.Documents, nextDoc)
+	}
+	return nil
+}
 
 // Execute performs the InsertOp on a given socket, yielding the reply when
 // successful (and an error otherwise).
