@@ -234,6 +234,42 @@ func (op *CommandOp) FromReader(r io.Reader) error {
 	}
 	return nil
 }
+func (op *CommandOp) FromSlice(s []byte) error {
+	offset := 0
+	database, length := readCStringWithLength(s)
+	op.Database = database
+	offset += length
+
+	commandName, length := readCStringWithLength(s[offset:])
+	op.CommandName = commandName
+	offset += length
+
+	op.CommandArgs = &bson.Raw{}
+	size, err := FetchDocument(s, offset, op.CommandArgs)
+	if err != nil {
+		return err
+	}
+	offset += int(size)
+
+	op.Metadata = &bson.Raw{}
+	size, err = FetchDocument(s, offset, op.Metadata)
+	if err != nil {
+		return err
+	}
+	offset += int(size)
+
+	op.InputDocs = make([]interface{}, 0)
+	for len(s) > offset {
+		doc := &bson.Raw{}
+		size, err := FetchDocument(s, offset, doc)
+		if err != nil {
+			return err
+		}
+		offset += int(size)
+		op.InputDocs = append(op.InputDocs, doc)
+	}
+	return nil
+}
 
 // Execute performs the CommandOp on a given session, yielding the reply when
 // successful (and an error otherwise).

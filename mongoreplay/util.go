@@ -85,11 +85,25 @@ func ReadDocument(r io.Reader) (doc []byte, err error) {
 	return
 }
 
-// ReadDocument read an entire BSON document. This document can be used with
-// bson.Unmarshal.
-func ReadDocumentInto(r io.Reader, doc []byte) (err error) {
-	_, err = io.ReadFull(r, doc[4:])
-	return
+func FetchDocument(s []byte, offset int, out interface{}) (int32, error) {
+	if len(s) < offset {
+		return 0, fmt.Errorf("slice too small")
+	}
+	docSize := getInt32(s[offset:], 0)
+
+	if docSize < 5 || docSize > maximumDocumentSize {
+		return 0, ErrInvalidSize
+	}
+	if len(s) < int(docSize)+offset {
+		return 0, fmt.Errorf("slice too small")
+	}
+
+	doc := s[offset : offset+int(docSize)]
+	err := bson.Unmarshal(doc, out)
+	if err != nil {
+		return 0, err
+	}
+	return docSize, nil
 }
 
 func getCommandName(rawOp *RawOp) (string, error) {
@@ -185,6 +199,14 @@ func readCString(b []byte) string {
 		}
 	}
 	return ""
+}
+func readCStringWithLength(b []byte) (string, int) {
+	for i := 0; i < len(b); i++ {
+		if b[i] == 0 {
+			return string(b[:i]), i + 1
+		}
+	}
+	return "", 0
 }
 
 // retrieves a 32 bit into from the given byte array whose first byte is in position pos

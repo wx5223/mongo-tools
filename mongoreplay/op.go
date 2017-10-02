@@ -46,6 +46,10 @@ type Op interface {
 	// structure.
 	FromReader(io.Reader) error
 
+	// FromSlice extracts data from a serialized op into its concrete
+	// structure.
+	FromSlice([]byte) error
+
 	// Execute performs the op on a given socket, yielding the reply when
 	// successful (and an error otherwise).
 	Execute(*mgo.MongoSocket) (Replyable, error)

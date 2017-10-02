@@ -112,6 +112,29 @@ func (op *UpdateOp) FromReader(r io.Reader) error {
 
 	return nil
 }
+func (op *UpdateOp) FromSlice(s []byte) error {
+	offset := 4
+	name, length := readCStringWithLength(s[offset:])
+	op.Collection = name
+	offset += length
+
+	op.Flags = uint32(getInt32(s[offset:], 0))
+	offset += 4
+
+	op.Selector = &bson.Raw{}
+	size, err := FetchDocument(s, offset, op.Selector)
+	if err != nil {
+		return err
+	}
+	offset += int(size)
+
+	op.Update = &bson.Raw{}
+	size, err = FetchDocument(s, offset, op.Update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // Execute performs the UpdateOp on a given socket, yielding the reply when
 // successful (and an error otherwise).

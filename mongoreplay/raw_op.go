@@ -1,7 +1,7 @@
 package mongoreplay
 
 import (
-	"bytes"
+	//	"bytes"
 	"fmt"
 	"io"
 
@@ -165,8 +165,15 @@ func (op *RawOp) Parse() (Op, error) {
 	default:
 		return nil, nil
 	}
-	reader := bytes.NewReader(op.Body[MsgHeaderLen:])
-	err := parsedOp.FromReader(reader)
+	/*
+		reader := bytes.NewReader(op.Body[MsgHeaderLen:])
+		err := parsedOp.FromReader(reader)
+		if err != nil {
+			return nil, err
+		}
+	*/
+
+	err := parsedOp.FromSlice(op.Body[MsgHeaderLen:])
 	if err != nil {
 		return nil, err
 	}
