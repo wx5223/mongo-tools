@@ -700,7 +700,7 @@ functions:
         script: |
 
           set -o errexit
-          ${activate_virtualenv}
+            ${activate_virtualenv}
           easy_install --upgrade boto3
 
           for security_group in ${security_groups}
@@ -2661,10 +2661,6 @@ buildvariants:
   run_on:
   - rhel70-small
   - rhel70
-  - rhel62-test
-  - rhel62-build
-  - rhel62-large
-  - rhel62-small
   expansions:
     <<: *mongod_default_startup_args
     <<: *mongo_default_startup_args
