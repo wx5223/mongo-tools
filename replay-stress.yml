@@ -711,7 +711,7 @@ functions:
           # Create new instance for test client.
           bash launch_evergreen_ec2_instance.sh   \
             -a ${ami}                             \
-            -d xvdf/3072/gp2/0                    \
+            -d xvdf/1000/io1/10000                \
             -i c3.4xlarge                         \
             -k ${ssh_key_id}                      \
             -p client_                            \
@@ -2145,7 +2145,7 @@ tasks:
 
 - name: replay_stress_1min_10pct
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_1min
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2175,7 +2175,7 @@ tasks:
 
 - name: replay_stress_1min_cpu
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_1min_10pct
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2208,7 +2208,7 @@ tasks:
 
 - name: replay_stress_1min_cpu_mem
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_1min_cpu
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2272,7 +2272,7 @@ tasks:
 
 - name: replay_stress_5min_10pct
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_5min
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2302,7 +2302,7 @@ tasks:
 
 - name: replay_stress_5min_cpu
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_5min_10pct
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2336,7 +2336,7 @@ tasks:
 
 - name: replay_stress_5min_cpu_mem
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_10min_cpu
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2372,7 +2372,7 @@ tasks:
 
 - name: replay_stress_10min
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_1min_cpu_mem
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2401,7 +2401,7 @@ tasks:
 
 - name: replay_stress_10min_10pct
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_10min
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2431,7 +2431,7 @@ tasks:
 
 - name: replay_stress_10min_cpu
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_5min_cpu
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2462,7 +2462,7 @@ tasks:
 
 - name: replay_stress_10min_cpu_mem
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_10min_10pct
   commands:
   - func: "fetch source"
   - func: "fetch tool"
