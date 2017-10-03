@@ -1,29 +1,22 @@
 package mongoreplay
 
+import (
+	"fmt"
+)
+
 // RecordedOp stores an op in addition to record/playback -related metadata
 type RecordedOp struct {
-	RawOp
-	Seen                *PreciseTime
-	PlayAt              *PreciseTime `bson:",omitempty"`
-	EOF                 bool         `bson:",omitempty"`
-	SrcEndpoint         string
-	DstEndpoint         string
 	SeenConnectionNum   int64
 	PlayedConnectionNum int64
-	PlayedAt            *PreciseTime `bson:",omitempty"`
-	Generation          int
 	Order               int64
-}
+	Generation          int
+	EOF                 bool `bson:",omitempty"`
 
-// ConnectionString gives a serialized representation of the endpoints
-func (op *RecordedOp) ConnectionString() string {
-	return op.SrcEndpoint + "->" + op.DstEndpoint
-}
+	Seen     *PreciseTime
+	PlayAt   *PreciseTime `bson:",omitempty"`
+	PlayedAt *PreciseTime `bson:",omitempty"`
 
-// ReversedConnectionString gives a serialized representation of the endpoints,
-// in reversed order
-func (op *RecordedOp) ReversedConnectionString() string {
-	return op.DstEndpoint + "->" + op.SrcEndpoint
+	RawOp
 }
 
 type orderedOps []RecordedOp
@@ -52,6 +45,10 @@ func (o *orderedOps) Push(op interface{}) {
 }
 
 type opKey struct {
-	driverEndpoint, serverEndpoint string
-	opID                           int32
+	connectionNum int64
+	opID          int32
+}
+
+func (k *opKey) String() string {
+	return fmt.Sprintf("opID:%d, connectionNum:%d", k.connectionNum, k.opID)
 }

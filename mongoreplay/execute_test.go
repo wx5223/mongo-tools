@@ -16,8 +16,7 @@ func TestCompleteReply(t *testing.T) {
 		CursorId: 2500,
 	}
 	recordedOp1 := &RecordedOp{
-		DstEndpoint: "a",
-		SrcEndpoint: "b",
+		SeenConnectionNum: 0,
 		RawOp: RawOp{
 			Header: MsgHeader{
 				RequestID: 1000,
@@ -34,8 +33,7 @@ func TestCompleteReply(t *testing.T) {
 	}
 
 	recordedOp2 := &RecordedOp{
-		DstEndpoint: "b",
-		SrcEndpoint: "a",
+		SeenConnectionNum: 0,
 		RawOp: RawOp{
 			Header: MsgHeader{
 				ResponseTo: 1000,
@@ -49,7 +47,7 @@ func TestCompleteReply(t *testing.T) {
 	}
 	context.handleCompletedReplies()
 
-	cursorIDLookup, ok := context.CursorIDMap.GetCursor(1500, -1)
+	cursorIDLookup, ok := context.CursorIDMap.GetCursor(1500, 0)
 	if !ok {
 		t.Error("can't find cursorID in map")
 	}

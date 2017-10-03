@@ -124,21 +124,6 @@ func getCommandName(rawOp *RawOp) (string, error) {
 	return string(commandName), nil
 }
 
-func cacheKey(op *RecordedOp, response bool) string {
-	var src, dst string
-	var id int32
-	if !response {
-		src = op.SrcEndpoint
-		dst = op.DstEndpoint
-		id = op.Header.RequestID
-	} else {
-		src = op.DstEndpoint
-		dst = op.SrcEndpoint
-		id = op.Header.ResponseTo
-	}
-	return fmt.Sprintf("%v:%v:%d:%v", src, dst, id, op.Generation)
-}
-
 // extractErrors inspects a bson doc and returns all of the mongodb errors contained within.
 func extractErrorsFromDoc(doc *bson.D) []error {
 	// errors may exist in the following places in the returned document:

@@ -1199,7 +1199,7 @@ func (generator *recordedOpGenerator) generateGetMore(cursorID int64, limit int3
 }
 
 // generateReply creates a RecordedOp reply using the given responseTo,
-// cursorID, and firstDOc, and pushes it to the recordedOpGenerator's channel to
+// cursorID, and firstDoc, and pushes it to the recordedOpGenerator's channel to
 // be executed when Play() is called
 func (generator *recordedOpGenerator) generateReply(responseTo int32, cursorID int64, firstDoc int32) error {
 	reply := mgo.ReplyOp{
@@ -1216,9 +1216,12 @@ func (generator *recordedOpGenerator) generateReply(responseTo int32, cursorID i
 
 	recordedOp.RawOp.Header.ResponseTo = responseTo
 	SetInt64(recordedOp.RawOp.Body, 4, cursorID) // change the cursorID field in the RawOp.Body
-	tempEnd := recordedOp.SrcEndpoint
-	recordedOp.SrcEndpoint = recordedOp.DstEndpoint
-	recordedOp.DstEndpoint = tempEnd
+	/*
+		tempEnd := recordedOp.SrcEndpoint
+		recordedOp.SrcEndpoint = recordedOp.DstEndpoint
+		recordedOp.DstEndpoint = tempEnd
+		recordedOp.SeenConnectionNum =
+	*/
 	generator.pushDriverRequestOps(recordedOp)
 	return nil
 }
@@ -1243,9 +1246,11 @@ func (generator *recordedOpGenerator) generateCommandReply(responseTo int32, cur
 	}
 
 	recordedOp.RawOp.Header.ResponseTo = responseTo
-	tempEnd := recordedOp.SrcEndpoint
-	recordedOp.SrcEndpoint = recordedOp.DstEndpoint
-	recordedOp.DstEndpoint = tempEnd
+	/*
+		tempEnd := recordedOp.SrcEndpoint
+		recordedOp.SrcEndpoint = recordedOp.DstEndpoint
+		recordedOp.DstEndpoint = tempEnd
+	*/
 	generator.pushDriverRequestOps(recordedOp)
 	return nil
 }
@@ -1287,7 +1292,7 @@ func (generator *recordedOpGenerator) fetchRecordedOpsFromConn(op interface{}) (
 	result.Body = make([]byte, MsgHeaderLen)
 	result.FromReader(generator.serverConnection)
 
-	recordedOp := &RecordedOp{RawOp: result, Seen: &PreciseTime{testTime}, SrcEndpoint: "a", DstEndpoint: "b", PlayedAt: &PreciseTime{}}
+	recordedOp := &RecordedOp{RawOp: result, Seen: &PreciseTime{testTime}, SeenConnectionNum: 0, PlayedAt: &PreciseTime{}}
 
 	d, _ := time.ParseDuration("2ms")
 	testTime = testTime.Add(d)

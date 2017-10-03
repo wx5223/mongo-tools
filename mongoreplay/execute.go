@@ -30,7 +30,7 @@ type ExecutionContext struct {
 
 	// CompleteReplies contains ReplyPairs that have been competed by the
 	// arrival of the missing half of.
-	CompleteReplies map[string]*ReplyPair
+	CompleteReplies map[opKey]*ReplyPair
 
 	// CursorIDMap contains the mapping between recorded cursorIDs and live
 	// cursorIDs
@@ -65,7 +65,7 @@ type ExecutionOptions struct {
 func NewExecutionContext(statColl *StatCollector, session *mgo.Session, options *ExecutionOptions) *ExecutionContext {
 	return &ExecutionContext{
 		IncompleteReplies: cache.New(60*time.Second, 60*time.Second),
-		CompleteReplies:   map[string]*ReplyPair{},
+		CompleteReplies:   map[opKey]*ReplyPair{},
 		CursorIDMap:       newCursorCache(),
 		StatCollector:     statColl,
 		fullSpeed:         options.fullSpeed,
@@ -82,7 +82,10 @@ func (context *ExecutionContext) AddFromWire(reply Replyable, recordedOp *Record
 	if cursorID, _ := reply.getCursorID(); cursorID == 0 {
 		return
 	}
-	key := cacheKey(recordedOp, false)
+	key := opKey{
+		connectionNum: recordedOp.SeenConnectionNum,
+		opID:          recordedOp.Header.RequestID,
+	}
 	toolDebugLogger.Logvf(DebugHigh, "Adding live reply with key %v", key)
 	context.completeReply(key, reply, ReplyFromWire)
 }
@@ -92,23 +95,26 @@ func (context *ExecutionContext) AddFromWire(reply Replyable, recordedOp *Record
 // on the reversed src/dest of the recordedOp which should the RecordedOp that
 // this ReplyOp was unmarshaled out of.
 func (context *ExecutionContext) AddFromFile(reply Replyable, recordedOp *RecordedOp) {
-	key := cacheKey(recordedOp, true)
+	key := opKey{
+		connectionNum: recordedOp.SeenConnectionNum,
+		opID:          recordedOp.Header.ResponseTo,
+	}
 	toolDebugLogger.Logvf(DebugHigh, "Adding recorded reply with key %v", key)
 	context.completeReply(key, reply, ReplyFromFile)
 }
 
-func (context *ExecutionContext) completeReply(key string, reply Replyable, opSource int) {
+func (context *ExecutionContext) completeReply(key opKey, reply Replyable, opSource int) {
 	context.Lock()
-	if cacheValue, ok := context.IncompleteReplies.Get(key); !ok {
+	if cacheValue, ok := context.IncompleteReplies.Get(key.String()); !ok {
 		rp := &ReplyPair{}
 		rp.ops[opSource] = reply
-		context.IncompleteReplies.Set(key, rp, cache.DefaultExpiration)
+		context.IncompleteReplies.Set(key.String(), rp, cache.DefaultExpiration)
 	} else {
 		rp := cacheValue.(*ReplyPair)
 		rp.ops[opSource] = reply
 		if rp.ops[1-opSource] != nil {
 			context.CompleteReplies[key] = rp
-			context.IncompleteReplies.Delete(key)
+			context.IncompleteReplies.Delete(key.String())
 		}
 	}
 	context.Unlock()

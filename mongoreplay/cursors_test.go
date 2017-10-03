@@ -298,11 +298,9 @@ func TestSkipOnMarkFailed(t *testing.T) {
 		for op := range generator.opChan {
 			if op.RawOp.Header.OpCode == OpCodeQuery {
 				opToFail = op
-				op.SrcEndpoint = "a"
-				op.DstEndpoint = "b"
+				op.SeenConnectionNum = 1
 			} else if op.RawOp.Header.OpCode == OpCodeReply {
-				op.SrcEndpoint = "b"
-				op.DstEndpoint = "a"
+				op.SeenConnectionNum = 1
 			}
 			preprocessChan <- op
 		}

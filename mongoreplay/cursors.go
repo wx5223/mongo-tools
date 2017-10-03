@@ -113,9 +113,8 @@ func (c *cursorsSeenMap) trackSeen(cursorID int64, connectionNum int64) {
 }
 func (c *cursorsSeenMap) trackReplied(cursorID int64, op *RecordedOp) {
 	key := opKey{
-		driverEndpoint: op.DstEndpoint,
-		serverEndpoint: op.SrcEndpoint,
-		opID:           op.Header.ResponseTo,
+		connectionNum: op.SeenConnectionNum,
+		opID:          op.Header.ResponseTo,
 	}
 	val, ok := (*c)[cursorID]
 	if !ok {
@@ -138,9 +137,8 @@ func (c *cursorsSeenMap) trackReplied(cursorID int64, op *RecordedOp) {
 // op so that execution for any sessions waiting on that cursor could continue.
 func (p *preprocessCursorManager) MarkFailed(failedOp *RecordedOp) {
 	key := opKey{
-		driverEndpoint: failedOp.SrcEndpoint,
-		serverEndpoint: failedOp.DstEndpoint,
-		opID:           failedOp.Header.RequestID,
+		connectionNum: failedOp.SeenConnectionNum,
+		opID:          failedOp.Header.RequestID,
 	}
 	if cursor, ok := p.opToCursors[key]; ok {
 		if cursorInfo, ok := p.cursorInfos[cursor]; ok {

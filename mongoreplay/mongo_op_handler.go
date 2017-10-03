@@ -279,8 +279,6 @@ func (bidi *bidi) handleStreamStateInMessage(stream *stream) {
 		bidi.opStream.unorderedOps <- RecordedOp{
 			RawOp:             *stream.op,
 			Seen:              &PreciseTime{stream.opTimeStamp},
-			SrcEndpoint:       stream.netFlow.Src().String(),
-			DstEndpoint:       stream.netFlow.Dst().String(),
 			SeenConnectionNum: bidi.connectionNumber,
 		}
 
