@@ -1215,13 +1215,7 @@ func (generator *recordedOpGenerator) generateReply(responseTo int32, cursorID i
 	}
 
 	recordedOp.RawOp.Header.ResponseTo = responseTo
-	SetInt64(recordedOp.RawOp.Body, 4, cursorID) // change the cursorID field in the RawOp.Body
-	/*
-		tempEnd := recordedOp.SrcEndpoint
-		recordedOp.SrcEndpoint = recordedOp.DstEndpoint
-		recordedOp.DstEndpoint = tempEnd
-		recordedOp.SeenConnectionNum =
-	*/
+	setInt64(recordedOp.RawOp.Body, 4, cursorID) // change the cursorID field in the RawOp.Body
 	generator.pushDriverRequestOps(recordedOp)
 	return nil
 }
@@ -1246,11 +1240,6 @@ func (generator *recordedOpGenerator) generateCommandReply(responseTo int32, cur
 	}
 
 	recordedOp.RawOp.Header.ResponseTo = responseTo
-	/*
-		tempEnd := recordedOp.SrcEndpoint
-		recordedOp.SrcEndpoint = recordedOp.DstEndpoint
-		recordedOp.DstEndpoint = tempEnd
-	*/
 	generator.pushDriverRequestOps(recordedOp)
 	return nil
 }
@@ -1292,7 +1281,7 @@ func (generator *recordedOpGenerator) fetchRecordedOpsFromConn(op interface{}) (
 	result.Body = make([]byte, MsgHeaderLen)
 	result.FromReader(generator.serverConnection)
 
-	recordedOp := &RecordedOp{RawOp: result, Seen: &PreciseTime{testTime}, SeenConnectionNum: 0, PlayedAt: &PreciseTime{}}
+	recordedOp := &RecordedOp{RawOp: result, Seen: testTime, SeenConnectionNum: 0}
 
 	d, _ := time.ParseDuration("2ms")
 	testTime = testTime.Add(d)

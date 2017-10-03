@@ -216,11 +216,11 @@ func (pfReader *PlaybackFileReader) OpChan(repeat int) (<-chan *RecordedOp, <-ch
 						}
 						return err
 					}
-					last = recordedOp.Seen.Time
+					last = recordedOp.Seen
 					if first.IsZero() {
-						first = recordedOp.Seen.Time
+						first = recordedOp.Seen
 					}
-					recordedOp.Seen.Time = recordedOp.Seen.Add(loopDelta)
+					recordedOp.Seen = recordedOp.Seen.Add(loopDelta)
 					recordedOp.Generation = generation
 					recordedOp.Order = order
 					// We want to suppress EOF's unless you're in the last

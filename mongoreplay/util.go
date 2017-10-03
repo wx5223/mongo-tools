@@ -203,9 +203,9 @@ func getInt32(b []byte, pos int) int32 {
 		(int32(b[pos+3]) << 24)
 }
 
-// SetInt32 sets the 32-bit int into the given byte array at position post
+// setInt32 sets the 32-bit int into the given byte array at position post
 // Taken from gopkg.in/mgo.v2/socket.go
-func SetInt32(b []byte, pos int, i int32) {
+func setInt32(b []byte, pos int, i int32) {
 	b[pos] = byte(i)
 	b[pos+1] = byte(i >> 8)
 	b[pos+2] = byte(i >> 16)
@@ -236,9 +236,9 @@ func convertKeys(v bson.M) (bson.M, error) {
 	return v, nil
 }
 
-// SetInt64 sets the 64-bit int into the given byte array at position post
+// setInt64 sets the 64-bit int into the given byte array at position post
 // Taken from gopkg.in/mgo.v2/socket.go
-func SetInt64(b []byte, pos int, i int64) {
+func setInt64(b []byte, pos int, i int64) {
 	b[pos] = byte(i)
 	b[pos+1] = byte(i >> 8)
 	b[pos+2] = byte(i >> 16)

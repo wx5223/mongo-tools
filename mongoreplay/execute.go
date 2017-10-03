@@ -193,7 +193,7 @@ func (context *ExecutionContext) newExecutionConnection(start time.Time, connect
 				t := time.Now()
 
 				if !context.fullSpeed && recordedOp.RawOp.Header.OpCode != OpCodeReply {
-					if t.Before(recordedOp.PlayAt.Time) {
+					if t.Before(recordedOp.PlayAt) {
 						time.Sleep(recordedOp.PlayAt.Sub(t))
 					}
 				}
@@ -252,7 +252,7 @@ func (context *ExecutionContext) Execute(op *RecordedOp, socket *mgo.MongoSocket
 			}
 		}
 
-		op.PlayedAt = &PreciseTime{time.Now()}
+		op.PlayedAt = time.Now()
 
 		reply, err = opToExec.Execute(socket)
 

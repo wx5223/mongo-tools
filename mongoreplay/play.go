@@ -145,7 +145,7 @@ func Play(context *ExecutionContext,
 			return fmt.Errorf("Can't play operation found with zero-timestamp: %#v", op)
 		}
 		if recordingStartTime.IsZero() {
-			recordingStartTime = op.Seen.Time
+			recordingStartTime = op.Seen
 			playbackStartTime = time.Now()
 		}
 
@@ -157,7 +157,7 @@ func Play(context *ExecutionContext,
 		// Adjust the opDelta for playback by dividing it by playback speed setting;
 		// e.g. 2x speed means the delta is half as long.
 		scaledDelta := float64(opDelta) / (speed)
-		op.PlayAt = &PreciseTime{playbackStartTime.Add(time.Duration(int64(scaledDelta)))}
+		op.PlayAt = playbackStartTime.Add(time.Duration(int64(scaledDelta)))
 
 		// Every queueGranularity ops make sure that we're no more then
 		// QueueTime seconds ahead Which should mean that the maximum that we're
@@ -176,7 +176,7 @@ func Play(context *ExecutionContext,
 		connectionChan, ok := connectionChans[op.SeenConnectionNum]
 		if !ok {
 			connectionID++
-			connectionChan = context.newExecutionConnection(op.PlayAt.Time, connectionID)
+			connectionChan = context.newExecutionConnection(op.PlayAt, connectionID)
 			connectionChans[op.SeenConnectionNum] = connectionChan
 		}
 		if op.EOF {

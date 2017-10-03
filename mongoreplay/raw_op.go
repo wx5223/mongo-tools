@@ -121,7 +121,7 @@ func (op *RawOp) ShortenReply() error {
 		copy(newBody[MsgHeaderLen:], out)
 		copy(newBody[MsgHeaderLen+newCommandReplySize:], op.Body[MsgHeaderLen+commandReplySize:])
 		// update the size of this message in the headers
-		SetInt32(newBody, 0, newSize)
+		setInt32(newBody, 0, newSize)
 		op.Header.MessageLength = newSize
 		op.Body = newBody
 

@@ -278,7 +278,7 @@ func (bidi *bidi) handleStreamStateInMessage(stream *stream) {
 
 		bidi.opStream.unorderedOps <- RecordedOp{
 			RawOp:             *stream.op,
-			Seen:              &PreciseTime{stream.opTimeStamp},
+			Seen:              stream.opTimeStamp,
 			SeenConnectionNum: bidi.connectionNumber,
 		}
 
@@ -316,7 +316,7 @@ func (bidi *bidi) handleStreamCompleted() {
 	}
 	if !lastOpTimeStamp.IsZero() {
 		bidi.opStream.unorderedOps <- RecordedOp{
-			Seen:              &PreciseTime{lastOpTimeStamp.Add(time.Nanosecond)},
+			Seen:              lastOpTimeStamp.Add(time.Nanosecond),
 			SeenConnectionNum: bidi.connectionNumber,
 			EOF:               true,
 		}

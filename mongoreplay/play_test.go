@@ -9,7 +9,7 @@ import (
 
 func TestRepeatGeneration(t *testing.T) {
 	recOp := &RecordedOp{
-		Seen: &PreciseTime{time.Now()},
+		Seen: time.Now(),
 	}
 
 	var buf bytes.Buffer
@@ -62,9 +62,9 @@ func TestRepeatGeneration(t *testing.T) {
 
 func TestPlayOpEOF(t *testing.T) {
 	ops := []RecordedOp{{
-		Seen: &PreciseTime{time.Now()},
+		Seen: time.Now(),
 	}, {
-		Seen: &PreciseTime{time.Now()},
+		Seen: time.Now(),
 		EOF:  true,
 	}}
 	var buf bytes.Buffer

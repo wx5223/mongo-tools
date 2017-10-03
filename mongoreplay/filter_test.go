@@ -268,7 +268,7 @@ func TestRemoveOpsBeforeTime(t *testing.T) {
 			close(generator.opChan)
 			i := 0
 			for recordedOp := range generator.opChan {
-				recordedOp.Seen = &PreciseTime{c.timesOfRecordedOps[i]}
+				recordedOp.Seen = c.timesOfRecordedOps[i]
 				inputOpChan <- recordedOp
 				i++
 			}
@@ -294,8 +294,8 @@ func TestRemoveOpsBeforeTime(t *testing.T) {
 		numOpsSeen := 0
 		for op := range resultOpChan {
 			numOpsSeen++
-			if op.Seen.Time.Before(c.timeToTruncateBefore) {
-				t.Errorf("execpected op with time %v to be truncated", op.Seen.Time)
+			if op.Seen.Before(c.timeToTruncateBefore) {
+				t.Errorf("execpected op with time %v to be truncated", op.Seen)
 			}
 		}
 
@@ -371,7 +371,7 @@ func TestRemoveOpsAfterDuration(t *testing.T) {
 			close(generator.opChan)
 			i := 0
 			for recordedOp := range generator.opChan {
-				recordedOp.Seen = &PreciseTime{c.timesOfRecordedOps[i]}
+				recordedOp.Seen = c.timesOfRecordedOps[i]
 				inputOpChan <- recordedOp
 				i++
 			}
@@ -394,9 +394,9 @@ func TestRemoveOpsAfterDuration(t *testing.T) {
 		for op := range resultOpChan {
 			numOpsSeen++
 			endTime := now.Add(c.durationToTruncateAfter)
-			if c.durationToTruncateAfter.Nanoseconds() != 0 && op.Seen.Time.After(endTime) {
+			if c.durationToTruncateAfter.Nanoseconds() != 0 && op.Seen.After(endTime) {
 				//		if  op.Seen.Time.After(endTime) {
-				t.Errorf("execpected op with time %v to be truncated", op.Seen.Time)
+				t.Errorf("execpected op with time %v to be truncated", op.Seen)
 			}
 		}
 

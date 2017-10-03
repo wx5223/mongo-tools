@@ -337,20 +337,20 @@ func (gen *ComparativeStatGenerator) GenerateOpStat(op *RecordedOp, replayedOp O
 		RequestData:   opMeta.Data,
 		Command:       opMeta.Command,
 		ConnectionNum: op.PlayedConnectionNum,
-		Seen:          &op.Seen.Time,
+		Seen:          &op.Seen,
 		RequestID:     op.Header.RequestID,
 	}
 	var playAtHasVal bool
-	if op.PlayAt != nil && !op.PlayAt.IsZero() {
-		stat.PlayAt = &op.PlayAt.Time
+	if !op.PlayAt.IsZero() {
+		stat.PlayAt = &op.PlayAt
 
 		playAtHasVal = true
 	}
-	if op.PlayedAt != nil && !op.PlayedAt.IsZero() {
-		stat.PlayedAt = &op.PlayedAt.Time
+	if !op.PlayedAt.IsZero() {
+		stat.PlayedAt = &op.PlayedAt
 
 		if playAtHasVal {
-			stat.PlaybackLagMicros = int64(op.PlayedAt.Sub(op.PlayAt.Time) / time.Microsecond)
+			stat.PlaybackLagMicros = int64(op.PlayedAt.Sub(op.PlayAt) / time.Microsecond)
 		}
 	}
 	if reply != nil {
@@ -381,7 +381,7 @@ func (gen *RegularStatGenerator) GenerateOpStat(recordedOp *RecordedOp, parsedOp
 		Ns:            meta.Ns,
 		Command:       meta.Command,
 		ConnectionNum: recordedOp.SeenConnectionNum,
-		Seen:          &recordedOp.Seen.Time,
+		Seen:          &recordedOp.Seen,
 	}
 	if msg != "" {
 		stat.Message = msg
