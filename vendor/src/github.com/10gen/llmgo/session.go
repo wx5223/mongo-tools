@@ -643,48 +643,51 @@ func (db *Database) Run(cmd interface{}, result interface{}) error {
 	return err
 }
 
+type closureData struct {
+	wait        sync.Mutex
+	metaData    []byte
+	commandData []byte
+	replyData   [][]byte
+	replyErr    error
+	docCount    int32
+}
+
 func ExecOpWithReply(socket *MongoSocket, op OpWithReply) (m []byte, c []byte, data [][]byte, reply interface{}, err error) {
-	var wait sync.Mutex
-	var metaData []byte
-	var commandData []byte
-	var replyData [][]byte
-	var replyErr error
+	cd := &closureData{}
 
-	wait.Lock()
-
-	var docCount int32
+	cd.wait.Lock()
 
 	replyFunc := func(err error, rfl *replyFuncLegacyArgs, rfc *replyFuncCommandArgs) {
 		debugf("replyFunc %v %#v %#v", err, rfl, rfc)
-		replyErr = err
+		cd.replyErr = err
 
 		if rfl != nil { // Here, we have a regular reply and need to handle its fields
 			reply = rfl.op
 			if err != nil || rfl.op.ReplyDocs == 0 {
-				wait.Unlock()
+				cd.wait.Unlock()
 			} else {
-				replyData = append(replyData, rfl.docData)
-				docCount++
-				if docCount == rfl.op.ReplyDocs {
-					wait.Unlock()
+				cd.replyData = append(cd.replyData, rfl.docData)
+				cd.docCount++
+				if cd.docCount == rfl.op.ReplyDocs {
+					cd.wait.Unlock()
 				}
 			}
 		} else if rfc != nil {
 			reply = rfc.op
 			if err == nil {
-				if metaData == nil {
-					metaData = rfc.metadata
+				if cd.metaData == nil {
+					cd.metaData = rfc.metadata
 				}
-				if commandData == nil {
-					commandData = rfc.commandReply
+				if cd.commandData == nil {
+					cd.commandData = rfc.commandReply
 				}
 				if rfc.bytesLeft != 0 {
-					replyData = append(replyData, rfc.outputDoc)
+					cd.replyData = append(cd.replyData, rfc.outputDoc)
 				} else {
-					wait.Unlock()
+					cd.wait.Unlock()
 				}
 			} else {
-				wait.Unlock()
+				cd.wait.Unlock()
 			}
 		}
 
@@ -696,8 +699,8 @@ func ExecOpWithReply(socket *MongoSocket, op OpWithReply) (m []byte, c []byte, d
 		return nil, nil, nil, nil, err
 	}
 
-	wait.Lock()
-	return metaData, commandData, replyData, reply, replyErr
+	cd.wait.Lock()
+	return cd.metaData, cd.commandData, cd.replyData, reply, cd.replyErr
 }
 
 func ExecOpWithoutReply(socket *MongoSocket, op interface{}) error {
