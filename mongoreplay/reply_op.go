@@ -103,7 +103,7 @@ func (op *ReplyOp) FromSlice(s []byte) error {
 	op.CursorId = getInt64(s[:], 4)
 	op.FirstDoc = getInt32(s[:], 12)
 	op.ReplyDocs = getInt32(s[:], 16)
-	op.Docs = []bson.Raw{}
+	op.Docs = make([]bson.Raw, 0, op.ReplyDocs)
 	sliceOffset += 20
 
 	// read as many docs as we can from the reader
