@@ -2456,6 +2456,9 @@ tasks:
       gob_file: 10min.gob.gz
       proffile: cpu.profile
       play_options: --fullSpeed --proffile=cpu.profile
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
