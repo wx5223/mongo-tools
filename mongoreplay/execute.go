@@ -6,7 +6,7 @@ import (
 	"time"
 
 	mgo "github.com/10gen/llmgo"
-	"github.com/patrickmn/go-cache"
+	cache "github.com/patrickmn/go-cache"
 )
 
 // ReplyPair contains both a live reply and a recorded reply when fully
@@ -191,7 +191,7 @@ func (context *ExecutionContext) newExecutionConnection(start time.Time, connect
 						time.Sleep(recordedOp.PlayAt.Sub(t))
 					}
 				}
-				userInfoLogger.Logvf(DebugHigh, "(Connection %v) op %v", connectionNum, recordedOp.String())
+				// userInfoLogger.Logvf(DebugHigh, "(Connection %v) op %v", connectionNum, recordedOp.String())
 				parsedOp, reply, err = context.Execute(recordedOp, socket)
 				if err != nil {
 					toolDebugLogger.Logvf(Always, "context.Execute error: %v", err)
