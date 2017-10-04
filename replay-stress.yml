@@ -712,7 +712,7 @@ functions:
           bash launch_evergreen_ec2_instance.sh   \
             -a ${ami}                             \
             -d xvdf/1000/io1/10000                \
-            -i c3.4xlarge                         \
+            -i c3.8xlarge                         \
             -k ${ssh_key_id}                      \
             -p client_                            \
             $security_groups                      \
@@ -723,7 +723,7 @@ functions:
           bash launch_evergreen_ec2_instance.sh   \
             -a ${ami}                             \
             -d xvdf/500/io1/10000                 \
-            -i c3.4xlarge                         \
+            -i c3.8xlarge                         \
             -k ${ssh_key_id}                      \
             -p server_                            \
             $security_groups                      \
