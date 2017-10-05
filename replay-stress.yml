@@ -232,18 +232,20 @@ mongo_tools_variables:
       - name: native-cert-ssl
     rhel_stress_task_list: &rhel_stress_tasks
       - name: replay-dist
-      - name: replay_stress_1min
-      - name: replay_stress_1min_10pct
-      - name: replay_stress_1min_cpu
-      - name: replay_stress_1min_cpu_mem
-      - name: replay_stress_5min
-      - name: replay_stress_5min_10pct
-      - name: replay_stress_5min_cpu
-      - name: replay_stress_5min_cpu_mem
-      - name: replay_stress_10min
+      - name: replay_stress_01min_05pct
+      - name: replay_stress_01min_10pct
+      - name: replay_stress_01min_25pct
+      - name: replay_stress_01min_full
+      - name: replay_stress_05min_05pct
+      - name: replay_stress_05min_10pct
+      - name: replay_stress_05min_25pct
+      - name: replay_stress_05min_full
+      - name: replay_stress_10min_05pct
       - name: replay_stress_10min_10pct
-      - name: replay_stress_10min_cpu
-      - name: replay_stress_10min_cpu_mem
+      - name: replay_stress_10min_25pct
+      - name: replay_stress_10min_full
+      - name: replay_stress_30min_05pct
+      - name: replay_stress_30min_10pct
 
 ## Common mongodb arguments
   mongod_arguments:
@@ -295,10 +297,12 @@ variables:
 - &stress_test
     s3_url: https://s3.amazonaws.com/mciuploads/mongo-tools/stress/gobfiles
     gob_file: 1min.gob.gz
+    proffile: cpu.profile
+    memfile: mem.profile
     create_split_gob_file: "0"
     log_file: mongoreplay.log
     play_split_num: "1"
-    play_options: --fullSpeed
+    play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
     playback_file: /data/mongoreplay.gob
 
 - &stress_files
@@ -2115,7 +2119,7 @@ tasks:
   - func: "create timeseries"
   - func: "upload timeseries"
 
-- name: replay_stress_1min
+- name: replay_stress_01min_05pct
   depends_on:
   - name: replay-dist
   commands:
@@ -2139,13 +2143,19 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
+      gob_file: 1minsplit5_00.gob.gz
+      play_split_num: "20"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
 
-- name: replay_stress_1min_10pct
+- name: replay_stress_01min_10pct
   depends_on:
-  - name: replay_stress_1min
+  - name: replay_stress_01min_05pct
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2173,9 +2183,9 @@ tasks:
     vars:
       <<: *stress_files
 
-- name: replay_stress_1min_cpu
+- name: replay_stress_01min_25pct
   depends_on:
-  - name: replay_stress_1min_10pct
+  - name: replay_stress_01min_10pct
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2197,18 +2207,15 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      proffile: cpu.profile
-      play_options: --fullSpeed --proffile=cpu.profile
-  - func: "generate graphs"
-    vars:
-      cpu_graph_file: cpu.svg
+      gob_file: 1minsplit25_00.gob.gz
+      play_split_num: "4"
   - func: "push remote files"
     vars:
       <<: *stress_files
 
-- name: replay_stress_1min_cpu_mem
+- name: replay_stress_01min_full
   depends_on:
-  - name: replay_stress_1min_cpu
+  - name: replay_stress_01min_25pct
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2230,20 +2237,14 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      proffile: cpu.profile
-      memfile: mem.profile
-      play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
-  - func: "generate graphs"
-    vars:
-      cpu_graph_file: cpu.svg
-      mem_graph_file: mem.svg
+      gob_file: 1min.gob.gz
   - func: "push remote files"
     vars:
       <<: *stress_files
 
-- name: replay_stress_5min
+- name: replay_stress_05min_05pct
   depends_on:
-  - name: replay-dist
+  - name: replay_stress_01min_full
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2265,14 +2266,15 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 5min.gob.gz
+      gob_file: 5minsplit5_00.gob.gz
+      play_split_num: "20"
   - func: "push remote files"
     vars:
       <<: *stress_files
 
-- name: replay_stress_5min_10pct
+- name: replay_stress_05min_10pct
   depends_on:
-  - name: replay_stress_5min
+  - name: replay_stress_05min_05pct
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2300,9 +2302,39 @@ tasks:
     vars:
       <<: *stress_files
 
-- name: replay_stress_5min_cpu
+- name: replay_stress_05min_25pct
   depends_on:
-  - name: replay_stress_5min_10pct
+  - name: replay_stress_05min_10pct
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 5minsplit25_00.gob.gz
+      play_split_num: "4"
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_05min_full
+  depends_on:
+  - name: replay_stress_05min_25pct
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2325,18 +2357,13 @@ tasks:
     vars:
       <<: *stress_test
       gob_file: 5min.gob.gz
-      proffile: cpu.profile
-      play_options: --fullSpeed --proffile=cpu.profile
-  - func: "generate graphs"
-    vars:
-      cpu_graph_file: cpu.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
 
-- name: replay_stress_5min_cpu_mem
+- name: replay_stress_10min_05pct
   depends_on:
-  - name: replay_stress_10min_cpu
+  - name: replay-dist
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2358,50 +2385,15 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 5min.gob.gz
-      proffile: cpu.profile
-      memfile: mem.profile
-      play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
-  - func: "generate graphs"
-    vars:
-      cpu_graph_file: cpu.svg
-      mem_graph_file: mem.svg
-  - func: "push remote files"
-    vars:
-      <<: *stress_files
-
-- name: replay_stress_10min
-  depends_on:
-  - name: replay_stress_1min_cpu_mem
-  commands:
-  - func: "fetch source"
-  - func: "fetch tool"
-    vars:
-      tool: mongoreplay
-  - func: "download mongod"
-    vars:
-      mongo_version: "3.2"
-  - func: "set up remote credentials"
-    vars:
-      <<: *stress_remote_credentials
-  - func: "set up virtualenv"
-  - func: "set up EC2 instances"
-    vars:
-      <<: *stress_ec2_instances
-  - func: "start remote mongod"
-    vars:
-      <<: *stress_mongod
-  - func: "run remote mongoreplay"
-    vars:
-      <<: *stress_test
-      gob_file: 10min.gob.gz
+      gob_file: 10minsplit5_00.gob.gz
+      play_split_num: "20"
   - func: "push remote files"
     vars:
       <<: *stress_files
 
 - name: replay_stress_10min_10pct
   depends_on:
-  - name: replay_stress_10min
+  - name: replay_stress_10min_05pct
   commands:
   - func: "fetch source"
   - func: "fetch tool"
@@ -2429,41 +2421,7 @@ tasks:
     vars:
       <<: *stress_files
 
-- name: replay_stress_10min_cpu
-  depends_on:
-  - name: replay_stress_5min_cpu
-  commands:
-  - func: "fetch source"
-  - func: "fetch tool"
-    vars:
-      tool: mongoreplay
-  - func: "download mongod"
-    vars:
-      mongo_version: "3.2"
-  - func: "set up remote credentials"
-    vars:
-      <<: *stress_remote_credentials
-  - func: "set up virtualenv"
-  - func: "set up EC2 instances"
-    vars:
-      <<: *stress_ec2_instances
-  - func: "start remote mongod"
-    vars:
-      <<: *stress_mongod
-  - func: "run remote mongoreplay"
-    vars:
-      <<: *stress_test
-      gob_file: 10min.gob.gz
-      proffile: cpu.profile
-      play_options: --fullSpeed --proffile=cpu.profile
-  - func: "generate graphs"
-    vars:
-      cpu_graph_file: cpu.svg
-  - func: "push remote files"
-    vars:
-      <<: *stress_files
-
-- name: replay_stress_10min_cpu_mem
+- name: replay_stress_10min_25pct
   depends_on:
   - name: replay_stress_10min_10pct
   commands:
@@ -2487,14 +2445,97 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 10min.gob.gz
-      proffile: cpu.profile
-      memfile: mem.profile
-      play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
-  - func: "generate graphs"
+      gob_file: 10minsplit25_00.gob.gz
+      play_split_num: "4"
+  - func: "push remote files"
     vars:
-      cpu_graph_file: cpu.svg
-      mem_graph_file: mem.svg
+      <<: *stress_files
+
+- name: replay_stress_10min_full
+  depends_on:
+  - name: replay_stress_10min_25pct
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 10min.gob.gz
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_30min_05pct
+  depends_on:
+  - name: replay_stress_05min_full
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 30minsplit5_00.gob.gz
+      play_split_num: "20"
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
+
+- name: replay_stress_30min_10pct
+  depends_on:
+  - name: replay_stress_10min_full
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 30minsplit10_00.gob.gz
+      play_split_num: "10"
   - func: "push remote files"
     vars:
       <<: *stress_files
