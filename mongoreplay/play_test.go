@@ -75,7 +75,7 @@ func TestPlayOpEOF(t *testing.T) {
 	}
 
 	for _, op := range ops {
-		err := file.Encode(op)
+		err := file.Encode(&op)
 		if err != nil {
 			t.Fatalf("unable to write to playback file %v", err)
 		}

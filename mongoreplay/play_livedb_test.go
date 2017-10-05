@@ -1277,6 +1277,7 @@ func (generator *recordedOpGenerator) fetchRecordedOpsFromConn(op interface{}) (
 	if err != nil {
 		return nil, fmt.Errorf("ReadHeader Error: %v\n", err)
 	}
+	fmt.Println(msg.MessageLength)
 	result := RawOp{Header: *msg}
 	result.Body = make([]byte, MsgHeaderLen)
 	result.FromReader(generator.serverConnection)
