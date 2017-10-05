@@ -2179,6 +2179,10 @@ tasks:
       <<: *stress_test
       gob_file: 1minsplit10_00.gob.gz
       play_split_num: "10"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2209,6 +2213,10 @@ tasks:
 #      <<: *stress_test
 #      gob_file: 1minsplit25_00.gob.gz
 #      play_split_num: "4"
+#  - func: "generate graphs"
+#    vars:
+#      cpu_graph_file: cpu.svg
+#      mem_graph_file: mem.svg
 #  - func: "push remote files"
 #    vars:
 #      <<: *stress_files
@@ -2238,6 +2246,10 @@ tasks:
     vars:
       <<: *stress_test
       gob_file: 1min.gob.gz
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2268,6 +2280,10 @@ tasks:
       <<: *stress_test
       gob_file: 5minsplit5_00.gob.gz
       play_split_num: "20"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2298,6 +2314,10 @@ tasks:
       <<: *stress_test
       gob_file: 5minsplit10_00.gob.gz
       play_split_num: "10"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2328,6 +2348,10 @@ tasks:
       <<: *stress_test
       gob_file: 5minsplit25_00.gob.gz
       play_split_num: "4"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2357,6 +2381,10 @@ tasks:
     vars:
       <<: *stress_test
       gob_file: 5min.gob.gz
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2387,6 +2415,10 @@ tasks:
       <<: *stress_test
       gob_file: 10minsplit5_00.gob.gz
       play_split_num: "20"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2417,6 +2449,10 @@ tasks:
       <<: *stress_test
       gob_file: 10minsplit10_00.gob.gz
       play_split_num: "10"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2447,6 +2483,10 @@ tasks:
       <<: *stress_test
       gob_file: 10minsplit25_00.gob.gz
       play_split_num: "4"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2476,6 +2516,10 @@ tasks:
     vars:
       <<: *stress_test
       gob_file: 10min.gob.gz
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2506,6 +2550,10 @@ tasks:
       <<: *stress_test
       gob_file: 30minsplit5_00.gob.gz
       play_split_num: "20"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
@@ -2536,6 +2584,10 @@ tasks:
       <<: *stress_test
       gob_file: 30minsplit10_00.gob.gz
       play_split_num: "10"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
   - func: "push remote files"
     vars:
       <<: *stress_files
