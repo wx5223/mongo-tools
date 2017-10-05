@@ -234,7 +234,7 @@ mongo_tools_variables:
       - name: replay-dist
       - name: replay_stress_01min_05pct
       - name: replay_stress_01min_10pct
-      - name: replay_stress_01min_25pct
+#      - name: replay_stress_01min_25pct
       - name: replay_stress_01min_full
       - name: replay_stress_05min_05pct
       - name: replay_stress_05min_10pct
@@ -2183,39 +2183,39 @@ tasks:
     vars:
       <<: *stress_files
 
-- name: replay_stress_01min_25pct
-  depends_on:
-  - name: replay_stress_01min_10pct
-  commands:
-  - func: "fetch source"
-  - func: "fetch tool"
-    vars:
-      tool: mongoreplay
-  - func: "download mongod"
-    vars:
-      mongo_version: "3.2"
-  - func: "set up remote credentials"
-    vars:
-      <<: *stress_remote_credentials
-  - func: "set up virtualenv"
-  - func: "set up EC2 instances"
-    vars:
-      <<: *stress_ec2_instances
-  - func: "start remote mongod"
-    vars:
-      <<: *stress_mongod
-  - func: "run remote mongoreplay"
-    vars:
-      <<: *stress_test
-      gob_file: 1minsplit25_00.gob.gz
-      play_split_num: "4"
-  - func: "push remote files"
-    vars:
-      <<: *stress_files
+#- name: replay_stress_01min_25pct
+#  depends_on:
+#  - name: replay_stress_01min_10pct
+#  commands:
+#  - func: "fetch source"
+#  - func: "fetch tool"
+#    vars:
+#      tool: mongoreplay
+#  - func: "download mongod"
+#    vars:
+#      mongo_version: "3.2"
+#  - func: "set up remote credentials"
+#    vars:
+#      <<: *stress_remote_credentials
+#  - func: "set up virtualenv"
+#  - func: "set up EC2 instances"
+#    vars:
+#      <<: *stress_ec2_instances
+#  - func: "start remote mongod"
+#    vars:
+#      <<: *stress_mongod
+#  - func: "run remote mongoreplay"
+#    vars:
+#      <<: *stress_test
+#      gob_file: 1minsplit25_00.gob.gz
+#      play_split_num: "4"
+#  - func: "push remote files"
+#    vars:
+#      <<: *stress_files
 
 - name: replay_stress_01min_full
   depends_on:
-  - name: replay_stress_01min_25pct
+  - name: replay_stress_01min_10pct
   commands:
   - func: "fetch source"
   - func: "fetch tool"
