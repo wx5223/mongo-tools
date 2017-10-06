@@ -9,7 +9,8 @@ import (
 
 func TestRepeatGeneration(t *testing.T) {
 	recOp := &RecordedOp{
-		Seen: time.Now(),
+		Seen:  time.Now(),
+		RawOp: EmptyRawOp,
 	}
 
 	var buf bytes.Buffer
@@ -62,11 +63,14 @@ func TestRepeatGeneration(t *testing.T) {
 
 func TestPlayOpEOF(t *testing.T) {
 	ops := []RecordedOp{{
-		Seen: time.Now(),
+		Seen:  time.Now(),
+		RawOp: EmptyRawOp,
 	}, {
-		Seen: time.Now(),
-		EOF:  true,
+		Seen:  time.Now(),
+		EOF:   true,
+		RawOp: EmptyRawOp,
 	}}
+
 	var buf bytes.Buffer
 	wc := NopWriteCloser(&buf)
 	file, err := playbackFileWriterFromWriteCloser(wc, "", PlaybackFileMetadata{})

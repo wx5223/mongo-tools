@@ -2,6 +2,7 @@ package mongoreplay
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -1273,13 +1274,17 @@ func (generator *recordedOpGenerator) fetchRecordedOpsFromConn(op interface{}) (
 	if err != nil {
 		return nil, fmt.Errorf("Socket.Query: %v\n", err)
 	}
-	msg, err := ReadHeader(generator.serverConnection)
-	if err != nil {
-		return nil, fmt.Errorf("ReadHeader Error: %v\n", err)
+	headerBuf := [MsgHeaderLen]byte{}
+	if _, err := io.ReadFull(generator.serverConnection, headerBuf[:]); err != nil {
+		return nil, err
 	}
-	fmt.Println(msg.MessageLength)
-	result := RawOp{Header: *msg}
+	header := MsgHeader{}
+	header.FromWire(headerBuf[:])
+
+	result := RawOp{Header: header}
 	result.Body = make([]byte, MsgHeaderLen)
+	copy(result.Body[:MsgHeaderLen], headerBuf[:])
+
 	result.FromReader(generator.serverConnection)
 
 	recordedOp := &RecordedOp{RawOp: result, Seen: testTime, SeenConnectionNum: 0}

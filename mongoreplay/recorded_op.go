@@ -10,6 +10,7 @@ const RecordedOpMetadataSize = 8 + 1 + 12
 
 // RecordedOp stores an op in addition to record/playback -related metadata
 type RecordedOp struct {
+	// Metadata
 	SeenConnectionNum int64
 	EOF               bool
 	Seen              time.Time
@@ -59,61 +60,64 @@ func (k *opKey) String() string {
 }
 
 func (r *RecordedOp) FromReader(reader io.Reader) error {
-	b := [RecordedOpMetadataSize + 4]byte{}
-	metadataBuffer := b[:]
-	_, err := io.ReadFull(reader, metadataBuffer)
+	//Read the length
+	lenBuf := [4]byte{}
+	_, err := io.ReadFull(reader, lenBuf[:])
 	if err != nil {
 		return err
 	}
 
-	r.MetadataFromSlice(metadataBuffer)
-	fmt.Println(r.Seen)
-	fmt.Println(metadataBuffer)
+	recordLength := getInt32(lenBuf[:], 0)
 
-	size := getInt32(metadataBuffer, RecordedOpMetadataSize)
-	fmt.Println(size)
+	opBuffer := make([]byte, recordLength-4)
 
-	bodyBuffer := make([]byte, size)
-	copy(bodyBuffer[:4], metadataBuffer[RecordedOpMetadataSize:])
-	_, err = io.ReadFull(reader, bodyBuffer[4:])
+	_, err = io.ReadFull(reader, opBuffer)
 	if err != nil {
 		return err
 	}
-	r.BodyFromSlice(bodyBuffer)
+
+	r.MetadataFromSlice(opBuffer[:RecordedOpMetadataSize])
+
+	r.BodyFromSlice(opBuffer[RecordedOpMetadataSize:])
 
 	return nil
 }
 
 func (r *RecordedOp) MetadataFromSlice(s []byte) {
 	offset := 0
-
-	r.Order = getInt64(s, offset)
+	r.SeenConnectionNum = getInt64(s, offset)
 	offset += 8
 
 	r.EOF = (s[offset] == 1)
 	offset += 1
 
 	sec := getInt64(s, offset)
-	offset += 4
+	offset += 8
 
 	nsec := getInt32(s, offset)
 
-	r.Seen = time.Unix(sec+internalToUnix, int64(nsec))
+	r.Seen = time.Unix(sec+internalToUnix, int64(nsec)).UTC()
 }
 
 func (r *RecordedOp) BodyFromSlice(s []byte) {
+	if len(s) == 0 {
+		r.RawOp = EmptyRawOp
+		return
+	}
 	size := getInt32(s, 0)
 	r.RawOp.Header.FromWire(s)
 	r.RawOp.Body = s[:size]
 }
 
 func (r *RecordedOp) ToSlice(s []byte) {
-	if cap(s) < RecordedOpMetadataSize+len(r.RawOp.Body) {
+	if cap(s) < RecordedOpMetadataSize+len(r.RawOp.Body)+4 {
 		panic("slice to record to too small")
 	}
 	offset := 0
+	setInt32(s, offset, int32(r.encodingSize()))
+	offset += 4
 
-	setInt64(s, offset, r.Order)
+	setInt64(s, offset, r.SeenConnectionNum)
 	offset += 8
 
 	if r.EOF {
@@ -138,27 +142,5 @@ func (r *RecordedOp) ToWriter(w io.Writer) error {
 }
 
 func (r *RecordedOp) encodingSize() int {
-	return len(r.RawOp.Body) + RecordedOpMetadataSize
-}
-
-func readRecordedOpBody(r io.Reader, s []byte, size int32) error {
-	if cap(s) < int(size) {
-		panic("recorded op body slice too small")
-	}
-	_, err := io.ReadFull(r, s[:size])
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func readRecordedOpMetadata(r io.Reader, s []byte) error {
-	if cap(s) < RecordedOpMetadataSize+4 {
-		panic("recorded op header slice too small")
-	}
-	_, err := io.ReadFull(r, s[:RecordedOpMetadataSize+4])
-	if err != nil {
-		return err
-	}
-	return nil
+	return len(r.RawOp.Body) + RecordedOpMetadataSize + 4
 }

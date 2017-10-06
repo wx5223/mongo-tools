@@ -212,10 +212,11 @@ func TestSplitInputFile(t *testing.T) {
 func TestRemoveOpsBeforeTime(t *testing.T) {
 	// array of times to use for testing
 	timesForTest := make([]time.Time, 16)
-	now := time.Now()
+	now := time.Now().UTC()
 	for i := range timesForTest {
 		timesForTest[i] = now.Add(time.Second * time.Duration(i))
 	}
+	t.Logf("times for test %v", timesForTest)
 
 	cases := []struct {
 		name string
@@ -279,6 +280,7 @@ func TestRemoveOpsBeforeTime(t *testing.T) {
 		if err != nil {
 			t.Fatalf("couldn't create zeroDuration")
 		}
+		t.Logf("time to truncate %v", c.timeToTruncateBefore)
 		// run the main filter routine with the given input
 		if err := Filter(inputOpChan, []*PlaybackFileWriter{playbackWriter}, false, c.timeToTruncateBefore, zeroDuration); err != nil {
 			t.Error(err)
@@ -295,7 +297,7 @@ func TestRemoveOpsBeforeTime(t *testing.T) {
 		for op := range resultOpChan {
 			numOpsSeen++
 			if op.Seen.Before(c.timeToTruncateBefore) {
-				t.Errorf("execpected op with time %v to be truncated", op.Seen)
+				t.Errorf("expected op with time %v to be truncated", op.Seen)
 			}
 		}
 
@@ -313,7 +315,7 @@ func TestRemoveOpsBeforeTime(t *testing.T) {
 func TestRemoveOpsAfterDuration(t *testing.T) {
 	// array of times to use for testing
 	timesForTest := make([]time.Time, 16)
-	now := time.Now()
+	now := time.Now().UTC()
 	for i := range timesForTest {
 		timesForTest[i] = now.Add(time.Second * time.Duration(i))
 	}
