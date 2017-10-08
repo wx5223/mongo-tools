@@ -78,7 +78,7 @@ class RemoteOperations(object):
         # Check if we can remotely access the host.
         self._access_code, self._access_buff = self._remote_access()
 
-    def _call(self, cmd):
+    def _call(self, cmd, no_wait=False):
         if self.debug:
             print(cmd)
         # If use_shell is False we need to split the command up into a list.
@@ -89,7 +89,10 @@ class RemoteOperations(object):
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT,
                                    shell=self.use_shell)
-        buff_stdout, _ = process.communicate()
+        if no_wait:
+            buff_stdout = "Not waiting for command to complete."
+        else:
+            buff_stdout, _ = process.communicate()
         return process.poll(), buff_stdout
 
     def _remote_access(self):
@@ -111,8 +114,8 @@ class RemoteOperations(object):
             time.sleep(self.retry_sleep)
         return ret, buff
 
-    def _perform_operation(self, cmd):
-        return self._call(cmd)
+    def _perform_operation(self, cmd, no_wait=False):
+        return self._call(cmd, no_wait)
 
     def access_established(self):
         """ Returns True if initial access was establsished. """
@@ -122,7 +125,7 @@ class RemoteOperations(object):
         """ Returns return code and output buffer from initial access attempt(s). """
         return self._access_code, self._access_buff
 
-    def operation(self, operation_type, operation_param, operation_dir=None):
+    def operation(self, operation_type, operation_param, operation_dir=None, no_wait=False):
         """ Main entry for remote operations. Returns (code, output).
 
             'operation_type' supports remote shell and copy operations.
@@ -201,18 +204,19 @@ class RemoteOperations(object):
         final_ret = 0
         buff = ""
         for cmd in cmds:
-            ret, new_buff = self._perform_operation(cmd)
+            ret, new_buff = self._perform_operation(cmd, no_wait)
             buff += new_buff
             final_ret = final_ret or ret
 
         return final_ret, buff
 
-    def shell(self, operation_param, operation_dir=None):
+    def shell(self, operation_param, operation_dir=None, no_wait=False):
         """ Helper for remote shell operations. """
         return self.operation(
             operation_type="shell",
             operation_param=operation_param,
-            operation_dir=operation_dir)
+            operation_dir=operation_dir,
+            no_wait=no_wait)
 
     def copy_to(self, operation_param, operation_dir=None):
         """ Helper for remote copy_to operations. """
@@ -324,6 +328,13 @@ def main():
                              help="Working directory on remote to execute commands"
                                   " form. Defaults to remote login directory.")
 
+    shell_options.add_option("--noWait",
+                             dest="no_wait",
+                             action="store_true",
+                             default=False,
+                             help="Wait for remote commands to complete, defaults to "
+                                  " '%default'.")
+
     copy_options.add_option("--file",
                             dest="files",
                             default=None,
@@ -397,7 +408,11 @@ def main():
         retries=options.retries,
         retry_sleep=options.retry_sleep,
         debug=options.debug)
-    ret_code, buffer = remote_op.operation(options.operation, operation_param, operation_dir)
+    ret_code, buffer = remote_op.operation(
+        options.operation,
+        operation_param,
+        operation_dir,
+        options.no_wait)
     if options.verbose:
         print("Return code: {} for command {}".format(ret_code, sys.argv))
         print(buffer)
