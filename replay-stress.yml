@@ -234,7 +234,7 @@ mongo_tools_variables:
       - name: replay-dist
       - name: replay_stress_01min_05pct
       - name: replay_stress_01min_10pct
-#      - name: replay_stress_01min_25pct
+      - name: replay_stress_01min_25pct
       - name: replay_stress_01min_full
       - name: replay_stress_05min_05pct
       - name: replay_stress_05min_10pct
@@ -290,7 +290,7 @@ variables:
 - &stress_mongod
     port: "20000"
     db_path: /data/db
-    log_path: $HOME/mongod.log
+    log_path: mongod.log
     seed_url: https://s3.amazonaws.com/mciuploads/mongo-tools/stress/seedfiles
     seed_file: mongod-42gb.tgz
 
@@ -300,16 +300,31 @@ variables:
     proffile: cpu.profile
     memfile: mem.profile
     create_split_gob_file: "0"
-    log_file: mongoreplay.log
+    mongoreplay_log: mongoreplay.log
     play_split_num: "1"
     play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
     playback_file: /data/mongoreplay.gob
 
 - &stress_files
-    server_artifacts: io.log proc.log ${log_path} ${db_path}/diagnostic.data
-    client_artifacts: io.log proc.log ${log_file} ${proffile} ${memfile} ${cpu_graph_file} ${mem_graph_file}
+    diagnostic_data: diagnostic.data
+    server_artifacts: ${log_path}
+    client_artifacts: ${mongoreplay_log} ${proffile} ${memfile} ${cpu_graph_file} ${mem_graph_file}
     s3_bucket: mciuploads
     s3_archive_dir: mongo-tools/stress
+
+- &resource_client
+    io_log: io.log
+    proc_log: proc.log
+    client_resource_logs: io.log proc.log
+    process_names: mongoreplay
+    remote_server: ${client_ip_address}
+
+- &resource_server
+    io_log: io.log
+    proc_log: proc.log
+    server_resource_logs: io.log proc.log
+    process_names: mongod
+    remote_server: ${server_ip_address}
 
 functions:
   "run legacy tests":
@@ -859,7 +874,7 @@ functions:
         working_dir: src
         script: |
           set -o errexit
-          cmds="${python|/opt/mongodbtoolchain/v2/bin/python2} resource_usage.py --fork --interval ${interval|5} --names ${process_names}"
+          cmds="${python|/opt/mongodbtoolchain/v2/bin/python2} resource_usage.py --fork --procFile ${proc_log} --ioFile ${io_log} --interval ${interval|5} --names ${process_names}"
           ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
           ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
             --verbose                                        \
@@ -900,11 +915,11 @@ functions:
           set -o errexit
             cmds="curl -s ${s3_url}/${gob_file} | gunzip -c > ${playback_file|/dev/null}"
           if [ ${create_split_gob_file|0} -eq 1 ]; then
-            cmds="$cmds; if [ ${play_split_num|1} -gt 1 ]; then echo 'Using first split file from ${play_split_num} files' | tee -a ${log_file}; ./mongoreplay filter -p ${playback_file} --outfilePrefix=playfile --split=${play_split_num}; mv playfile00.playback ${playback_file}; fi"
+            cmds="$cmds; if [ ${play_split_num|1} -gt 1 ]; then echo 'Using first split file from ${play_split_num} files' | tee -a ${mongoreplay_log}; ./mongoreplay filter -p ${playback_file} --outfilePrefix=playfile --split=${play_split_num}; mv playfile00.playback ${playback_file}; fi"
           fi
           play_cmd="./mongoreplay play --host mongodb://${server_ip_address}:${port} ${play_options} -p ${playback_file}"
-          cmds="$cmds; echo '$play_cmd' | tee -a ${log_file}"
-          cmds="$cmds; (time $play_cmd) 2>&1 | tee -a ${log_file}"
+          cmds="$cmds; echo '$play_cmd' | tee -a ${mongoreplay_log}"
+          cmds="$cmds; (time $play_cmd) 2>&1 | tee -a ${mongoreplay_log}"
           ssh_connection_options="${ssh_identity} ${ssh_connection_options}"
           ${python|/opt/mongodbtoolchain/v2/bin/python2} remote_operations.py \
             --verbose                                        \
@@ -940,7 +955,7 @@ functions:
             exit 0
           fi
           # Copy files from client.
-          for file in ${client_artifacts}
+          for file in ${client_artifacts} ${client_resource_logs}
           do
             file_opts="$file_opts --file $file"
           done
@@ -959,7 +974,7 @@ functions:
         working_dir: src
         script: |
           # Copy files from server.
-          for file in ${server_artifacts}
+          for file in ${server_artifacts} ${db_path}/${diagnostic_data} ${server_resource_logs}
           do
             file_opts="$file_opts --file $file"
           done
@@ -977,17 +992,17 @@ functions:
       params:
         working_dir: src
         script: |
-          ${tar|tar} cvzf diagnostic-data.tgz diagnostic.data mongod.log
+          ${tar|tar} cvzf mongod.tgz ${server_artifacts} ${diagnostic_data} ${server_resource_logs}
     - command: s3.put
       params:
         aws_key: ${aws_key}
         aws_secret: ${aws_secret}
-        local_file: src/diagnostic-data.tgz
-        remote_file: ${s3_archive_dir}/ftdc/mongo-diagnostic-data-${task_id}-${execution}.tgz
+        local_file: src/mongod.tgz
+        remote_file: ${s3_archive_dir}/mongod/mongod-${task_id}-${execution}.tgz
         bucket: ${s3_bucket}
         permissions: public-read
         content_type: ${content_type|application/x-gzip}
-        display_name: FTDC Diagnostic Data & mongod.log - Execution ${execution}
+        display_name: "Server artifacts: ${server_artifacts} ${server_resource_logs} & FTDC data - Execution ${execution}"
         optional: true
 
     # Archive mongoreplay & client artifacts.
@@ -995,7 +1010,7 @@ functions:
       params:
         working_dir: src
         script: |
-          ${tar|tar} cvzf mongoreplay.tgz bin/mongoreplay ${client_artifacts}
+          ${tar|tar} cvzf mongoreplay.tgz bin/mongoreplay ${client_artifacts} ${client_resource_logs}
     - command: s3.put
       params:
         aws_key: ${aws_key}
@@ -1005,7 +1020,7 @@ functions:
         bucket: ${s3_bucket}
         permissions: public-read
         content_type: ${content_type|application/x-gzip}
-        display_name: mongoreplay Binary & ${client_artifacts} - Execution ${execution}
+        display_name: "Client artifacts: mongoreplay Binary & ${client_artifacts} ${client_resource_logs} - Execution ${execution}"
         optional: true
 
   "cleanup EC2 instances":
@@ -2170,14 +2185,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2214,14 +2225,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2238,39 +2245,53 @@ tasks:
     vars:
       <<: *stress_files
 
-#- name: replay_stress_01min_25pct
-#  depends_on:
-#  - name: replay_stress_01min_10pct
-#  commands:
-#  - func: "fetch source"
-#  - func: "fetch tool"
-#    vars:
-#      tool: mongoreplay
-#  - func: "download mongod"
-#    vars:
-#      mongo_version: "3.2"
-#  - func: "set up remote credentials"
-#    vars:
-#      <<: *stress_remote_credentials
-#  - func: "set up virtualenv"
-#  - func: "set up EC2 instances"
-#    vars:
-#      <<: *stress_ec2_instances
-#  - func: "start remote mongod"
-#    vars:
-#      <<: *stress_mongod
-#  - func: "run remote mongoreplay"
-#    vars:
-#      <<: *stress_test
-#      gob_file: 1minsplit25_00.gob.gz
-#      play_split_num: "4"
-#  - func: "generate graphs"
-#    vars:
-#      cpu_graph_file: cpu.svg
-#      mem_graph_file: mem.svg
-#  - func: "push remote files"
-#    vars:
-#      <<: *stress_files
+- name: replay_stress_01min_25pct
+  depends_on:
+  - name: replay_stress_01min_10pct
+  commands:
+  - func: "fetch source"
+  - func: "fetch tool"
+    vars:
+      tool: mongoreplay
+  - func: "download mongod"
+    vars:
+      mongo_version: "3.2"
+  - func: "set up remote credentials"
+    vars:
+      <<: *stress_remote_credentials
+  - func: "set up virtualenv"
+  - func: "set up EC2 instances"
+    vars:
+      <<: *stress_ec2_instances
+  - func: "start remote resource monitor"
+    vars:
+      process_names: mongod
+      remote_server: ${server_ip_address}
+  - func: "start remote resource monitor"
+    vars:
+      process_names: mongoreplay
+      remote_server: ${client_ip_address}
+  - func: "start remote resource monitor"
+    vars:
+      <<: *resource_server
+  - func: "start remote resource monitor"
+    vars:
+      <<: *resource_client
+  - func: "start remote mongod"
+    vars:
+      <<: *stress_mongod
+  - func: "run remote mongoreplay"
+    vars:
+      <<: *stress_test
+      gob_file: 1minsplit25_00.gob.gz
+      play_split_num: "4"
+  - func: "generate graphs"
+    vars:
+      cpu_graph_file: cpu.svg
+      mem_graph_file: mem.svg
+  - func: "push remote files"
+    vars:
+      <<: *stress_files
 
 - name: replay_stress_01min_full
   depends_on:
@@ -2292,14 +2313,18 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
       process_names: mongod
       remote_server: ${server_ip_address}
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
       process_names: mongoreplay
       remote_server: ${client_ip_address}
+  - func: "start remote resource monitor"
+    vars:
+      <<: *resource_server
+  - func: "start remote resource monitor"
+    vars:
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2335,14 +2360,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2379,14 +2400,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2423,14 +2440,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2467,14 +2480,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2510,14 +2519,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2554,14 +2559,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2598,14 +2599,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2642,14 +2639,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2685,14 +2678,10 @@ tasks:
       <<: *stress_ec2_instances
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongod
-      remote_server: ${server_ip_address}
+      <<: *resource_server
   - func: "start remote resource monitor"
     vars:
-      interval: "5"
-      process_names: mongoreplay
-      remote_server: ${client_ip_address}
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
@@ -2727,6 +2716,12 @@ tasks:
   - func: "set up EC2 instances"
     vars:
       <<: *stress_ec2_instances
+  - func: "start remote resource monitor"
+    vars:
+      <<: *resource_server
+  - func: "start remote resource monitor"
+    vars:
+      <<: *resource_client
   - func: "start remote mongod"
     vars:
       <<: *stress_mongod
