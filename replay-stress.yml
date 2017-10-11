@@ -295,15 +295,15 @@ variables:
     seed_file: mongod-42gb.tgz
 
 - &stress_test
-    s3_url: https://s3.amazonaws.com/mciuploads/mongo-tools/stress/gobfiles
-    gob_file: 1min.gob.gz
+    s3_url: https://s3.amazonaws.com/mciuploads/mongo-tools/stress/weffiles
+    wef_file: 1min.wef.gz
     proffile: cpu.profile
     memfile: mem.profile
-    create_split_gob_file: "0"
+    create_split_wef_file: "0"
     mongoreplay_log: mongoreplay.log
     play_split_num: "1"
     play_options: --fullSpeed --proffile=cpu.profile --memfile mem.profile
-    playback_file: /data/mongoreplay.gob
+    playback_file: /data/mongoreplay.wef
 
 - &stress_files
     diagnostic_data: diagnostic.data
@@ -913,8 +913,8 @@ functions:
         working_dir: src
         script: |
           set -o errexit
-            cmds="curl -s ${s3_url}/${gob_file} | gunzip -c > ${playback_file|/dev/null}"
-          if [ ${create_split_gob_file|0} -eq 1 ]; then
+            cmds="curl -s ${s3_url}/${wef_file} | gunzip -c > ${playback_file|/dev/null}"
+          if [ ${create_split_wef_file|0} -eq 1 ]; then
             cmds="$cmds; if [ ${play_split_num|1} -gt 1 ]; then echo 'Using first split file from ${play_split_num} files' | tee -a ${mongoreplay_log}; ./mongoreplay filter -p ${playback_file} --outfilePrefix=playfile --split=${play_split_num}; mv playfile00.playback ${playback_file}; fi"
           fi
           play_cmd="./mongoreplay play --host mongodb://${server_ip_address}:${port} ${play_options} -p ${playback_file}"
@@ -2195,7 +2195,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 1minsplit5_00.gob.gz
+      wef_file: 1minsplit5_00.wef.gz
       play_split_num: "20"
   - func: "generate graphs"
     vars:
@@ -2235,7 +2235,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 1minsplit10_00.gob.gz
+      wef_file: 1minsplit10_00.wef.gz
       play_split_num: "10"
   - func: "generate graphs"
     vars:
@@ -2283,7 +2283,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 1minsplit25_00.gob.gz
+      wef_file: 1minsplit25_00.wef.gz
       play_split_num: "4"
   - func: "generate graphs"
     vars:
@@ -2331,7 +2331,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 1min.gob.gz
+      wef_file: 1min.wef.gz
   - func: "generate graphs"
     vars:
       cpu_graph_file: cpu.svg
@@ -2370,7 +2370,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 5minsplit5_00.gob.gz
+      wef_file: 5minsplit5_00.wef.gz
       play_split_num: "20"
   - func: "generate graphs"
     vars:
@@ -2410,7 +2410,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 5minsplit10_00.gob.gz
+      wef_file: 5minsplit10_00.wef.gz
       play_split_num: "10"
   - func: "generate graphs"
     vars:
@@ -2450,7 +2450,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 5minsplit25_00.gob.gz
+      wef_file: 5minsplit25_00.wef.gz
       play_split_num: "4"
   - func: "generate graphs"
     vars:
@@ -2490,7 +2490,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 5min.gob.gz
+      wef_file: 5min.wef.gz
   - func: "generate graphs"
     vars:
       cpu_graph_file: cpu.svg
@@ -2529,7 +2529,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 10minsplit5_00.gob.gz
+      wef_file: 10minsplit5_00.wef.gz
       play_split_num: "20"
   - func: "generate graphs"
     vars:
@@ -2569,7 +2569,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 10minsplit10_00.gob.gz
+      wef_file: 10minsplit10_00.wef.gz
       play_split_num: "10"
   - func: "generate graphs"
     vars:
@@ -2609,7 +2609,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 10minsplit25_00.gob.gz
+      wef_file: 10minsplit25_00.wef.gz
       play_split_num: "4"
   - func: "generate graphs"
     vars:
@@ -2649,7 +2649,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 10min.gob.gz
+      wef_file: 10min.wef.gz
   - func: "generate graphs"
     vars:
       cpu_graph_file: cpu.svg
@@ -2688,7 +2688,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 30minsplit5_00.gob.gz
+      wef_file: 30minsplit5_00.wef.gz
       play_split_num: "20"
   - func: "generate graphs"
     vars:
@@ -2728,7 +2728,7 @@ tasks:
   - func: "run remote mongoreplay"
     vars:
       <<: *stress_test
-      gob_file: 30minsplit10_00.gob.gz
+      wef_file: 30minsplit10_00.wef.gz
       play_split_num: "10"
   - func: "generate graphs"
     vars:
