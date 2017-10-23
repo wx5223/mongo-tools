@@ -1,6 +1,7 @@
 package mongoreplay
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
 	"time"
@@ -568,13 +569,21 @@ func TestShortenLegacyReply(t *testing.T) {
 		t.Errorf("could not marshal bson: %v", err)
 	}
 
+	opBody := result.RawOp.Body
 	// add the two docs as the docs from the reply
-	result.RawOp.Body = append(result.RawOp.Body, asByte1...)
-	result.RawOp.Body = append(result.RawOp.Body, asByte2...)
-	result.Header.MessageLength = int32(len(result.RawOp.Body))
+	opBody = append(opBody, asByte1...)
+	opBody = append(opBody, asByte2...)
+	// set the size in the header
+	setInt32(opBody, 0, int32(len(opBody)))
 
-	// reply should be functional and parseable
-	parsed, err := result.RawOp.Parse()
+	recordedOp := &RecordedOp{}
+
+	recordedOp.BodyFromSlice(opBody)
+	if err != nil {
+		t.Error(err)
+	}
+
+	parsed, err := recordedOp.RawOp.Parse()
 	if err != nil {
 		t.Errorf("error parsing op: %v", err)
 	}
@@ -583,14 +592,31 @@ func TestShortenLegacyReply(t *testing.T) {
 	if !ok {
 		t.Errorf("parsed op was wrong type")
 	}
+
 	if !(len(fullReply.Docs) == 2) {
 		t.Errorf("parsed reply has wrong number of docs: %d", len(fullReply.Docs))
 	}
 
 	// shorten the reply
-	result.ShortenReply()
+	recordedOp.ShortenReply()
 
-	parsed, err = result.RawOp.Parse()
+	bodySlice := make([]byte, 0)
+	// Write it out to a slice
+	buf := bytes.NewBuffer(bodySlice)
+
+	err = recordedOp.ToWriter(buf)
+	if err != nil {
+		t.Errorf("unable to write out to writer")
+	}
+
+	recordedOpResult := &RecordedOp{}
+
+	err = recordedOpResult.FromReader(buf)
+	if err != nil {
+		t.Errorf("unable to read op from buffer %v", err)
+	}
+
+	parsed, err = recordedOpResult.RawOp.Parse()
 	if err != nil {
 		t.Errorf("error parsing op: %v", err)
 	}
@@ -757,4 +783,5 @@ func TestLegacyOpReplyGetCursorID(t *testing.T) {
 	if cursorID != testCursorID {
 		t.Errorf("cursorID did not match expected. Found: %v --- Expected: %v", cursorID, testCursorID)
 	}
+
 }

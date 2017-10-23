@@ -89,6 +89,7 @@ func (op *RawOp) ShortenReply() error {
 			return fmt.Errorf("the size of the first document is greater then the size of the message")
 		}
 		op.Body = op.Body[0:(20 + MsgHeaderLen + firstDocSize)]
+		setInt32(op.Body, 0, int32(len(op.Body)))
 
 	case OpCodeCommandReply:
 		// unmarshal the needed fields for replacing into the buffer

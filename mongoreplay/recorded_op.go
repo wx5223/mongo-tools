@@ -104,9 +104,9 @@ func (r *RecordedOp) BodyFromSlice(s []byte) {
 		r.RawOp = EmptyRawOp
 		return
 	}
-	size := getInt32(s, 0)
+	messageLength := getInt32(s, 0)
 	r.RawOp.Header.FromWire(s)
-	r.RawOp.Body = s[:size]
+	r.RawOp.Body = s[:messageLength]
 }
 
 func (r *RecordedOp) ToSlice(s []byte) {
