@@ -275,6 +275,7 @@ func (op *CommandOp) FromSlice(s []byte) error {
 // successful (and an error otherwise).
 func (op *CommandOp) Execute(socket *mgo.MongoSocket) (Replyable, error) {
 	before := time.Now()
+	op.CommandOp.Metadata = nil
 	metadata, commandReply, replyData, resultReply, err := mgo.ExecOpWithReply(socket, &op.CommandOp)
 	after := time.Now()
 	if err != nil {
