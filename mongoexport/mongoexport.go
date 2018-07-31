@@ -29,6 +29,7 @@ import (
 const (
 	CSV                            = "csv"
 	JSON                           = "json"
+	SHAWN                           = "shawn"
 	watchProgressorUpdateFrequency = 8000
 )
 
@@ -100,8 +101,8 @@ func (exp *MongoExport) ValidateSettings() error {
 		// special error for an empty type value
 		return fmt.Errorf("--type cannot be empty")
 	}
-	if exp.OutputOpts.Type != CSV && exp.OutputOpts.Type != JSON {
-		return fmt.Errorf("invalid output type '%v', choose 'json' or 'csv'", exp.OutputOpts.Type)
+	if exp.OutputOpts.Type != CSV && exp.OutputOpts.Type != JSON && exp.OutputOpts.Type != SHAWN {
+		return fmt.Errorf("invalid output type '%v', choose 'json' or 'csv' or 'shawn'", exp.OutputOpts.Type)
 	}
 
 	if exp.InputOpts.Query != "" && exp.InputOpts.ForceTableScan {
@@ -412,6 +413,32 @@ func (exp *MongoExport) getExportOutput(out io.Writer) (ExportOutput, error) {
 		}
 
 		return NewCSVExportOutput(exportFields, exp.OutputOpts.NoHeaderLine, out), nil
+	} else if exp.OutputOpts.Type == SHAWN {
+		// TODO what if user specifies *both* --fields and --fieldFile?
+		var fields []string
+		var err error
+		if len(exp.OutputOpts.Fields) > 0 {
+			fields = strings.Split(exp.OutputOpts.Fields, ",")
+		} else if exp.OutputOpts.FieldFile != "" {
+			fields, err = util.GetFieldsFromFile(exp.OutputOpts.FieldFile)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("CSV mode requires a field list")
+		}
+
+		exportFields := make([]string, 0, len(fields))
+		for _, field := range fields {
+			// for '$' field projections, exclude '.$' from the field name
+			if i := strings.LastIndex(field, "."); i != -1 && field[i+1:] == "$" {
+				exportFields = append(exportFields, field[:i])
+			} else {
+				exportFields = append(exportFields, field)
+			}
+		}
+
+		return NewShawnExportOutput(exportFields, exp.OutputOpts.NoHeaderLine, out, exp.OutputOpts.FieldSplit, exp.OutputOpts.LineSplit), nil
 	}
 	return NewJSONExportOutput(exp.OutputOpts.JSONArray, exp.OutputOpts.Pretty, out), nil
 }

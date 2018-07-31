@@ -42,6 +42,10 @@ type OutputFormatOptions struct {
 
 	// NoHeaderLine, if set, will export CSV data without a list of field names at the first line.
 	NoHeaderLine bool `long:"noHeaderLine" description:"export CSV data without a list of field names at the first line"`
+
+	FieldSplit string `long:"fieldSplit" value-name:"<filename>" description:"used for shawn's own mode split fields"`
+
+	LineSplit string `long:"lineSplit" value-name:"<filename>" description:"used for shawn's own mode split lines"`
 }
 
 // Name returns a human-readable group name for output format options.
